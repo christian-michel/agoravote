@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, ApiError, type ModuleManifest, type Question, type ResultSet } from "../api/client";
 import { Alert, Button, Card } from "./ui";
+import { BarList } from "./charts";
+import { METHOD_COPY } from "../lib/methodCopy";
 
 export function TallyPanel({
   campaignId,
@@ -56,10 +58,15 @@ export function TallyPanel({
     }
   }
 
+  const options =
+    "options" in question.question_type
+      ? (question.question_type.options as { id: string; labels: Record<string, string> }[])
+      : [];
+
   return (
     <Card>
       <div className="flex items-start justify-between gap-4">
-        <h3 className="font-display text-base font-medium text-ink">{question.prompt.fr}</h3>
+        <h3 className="font-medium text-ink">{question.prompt.fr}</h3>
         <Link
           to={`/campagnes/${campaignId}/questions/${question.id}/resultats`}
           className="shrink-0 text-xs text-accent hover:underline"
@@ -75,75 +82,92 @@ export function TallyPanel({
       )}
 
       {canTally && (
-        <div className="mt-4 flex flex-wrap items-end gap-3 text-sm">
-          <label className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-ink-soft">Méthode</span>
-            <select
-              className="rounded-md border border-line bg-surface px-2 py-1.5"
-              value={methodId}
-              onChange={(e) => setMethodId(e.target.value)}
-            >
-              {modules.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.id}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-ink-soft">Électeurs éligibles</span>
-            <input
-              className="w-28 rounded-md border border-line bg-surface px-2 py-1.5"
-              type="number"
-              min={0}
-              value={eligibleVoters}
-              onChange={(e) => setEligibleVoters(e.target.value)}
-            />
-          </label>
-          <label className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-ink-soft">Quorum (%)</span>
-            <input
-              className="w-24 rounded-md border border-line bg-surface px-2 py-1.5"
-              type="number"
-              min={0}
-              max={100}
-              value={quorum}
-              onChange={(e) => setQuorum(e.target.value)}
-            />
-          </label>
-          <Button onClick={handleTally} disabled={loading || !methodId}>
-            {loading ? "Calcul…" : "Dépouiller"}
-          </Button>
+        <div className="mt-5 border-t border-line pt-4">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted">Méthode de vote</p>
+          <div className="mt-2 grid gap-2 sm:grid-cols-3">
+            {modules.map((m) => {
+              const copy = METHOD_COPY[m.id];
+              const selected = methodId === m.id;
+              return (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => setMethodId(m.id)}
+                  className={`rounded-lg border px-3 py-2.5 text-left transition-colors ${
+                    selected ? "border-accent bg-accent-soft" : "border-line hover:border-accent/50"
+                  }`}
+                >
+                  <p className="text-sm font-medium text-ink">{copy?.label ?? m.id}</p>
+                  {copy && <p className="mt-0.5 text-xs text-muted">{copy.description}</p>}
+                </button>
+              );
+            })}
+          </div>
+
+          {options.length > 0 && (
+            <div className="mt-4">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted">Aperçu du bulletin</p>
+              <ul className="mt-2 flex flex-col gap-1.5">
+                {options.map((o) => (
+                  <li
+                    key={o.id}
+                    className="rounded-md border border-line bg-paper px-3 py-1.5 text-xs text-ink-soft"
+                  >
+                    {o.labels.fr}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          <div className="mt-4 flex flex-wrap items-end gap-3 text-sm">
+            <label className="flex flex-col gap-1">
+              <span className="text-xs font-medium text-ink-soft">Électeurs éligibles</span>
+              <input
+                className="w-28 rounded-md border border-line bg-surface px-2 py-1.5"
+                type="number"
+                min={0}
+                value={eligibleVoters}
+                onChange={(e) => setEligibleVoters(e.target.value)}
+              />
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-xs font-medium text-ink-soft">Quorum (%)</span>
+              <input
+                className="w-24 rounded-md border border-line bg-surface px-2 py-1.5"
+                type="number"
+                min={0}
+                max={100}
+                value={quorum}
+                onChange={(e) => setQuorum(e.target.value)}
+              />
+            </label>
+            <Button onClick={handleTally} disabled={loading || !methodId}>
+              {loading ? "Calcul…" : "Dépouiller"}
+            </Button>
+          </div>
         </div>
       )}
 
       {result && (
         <div className="mt-5 border-t border-line pt-4">
           <p className="text-xs text-muted">
-            Méthode {result.voting_method_id} v{result.voting_method_version} ·{" "}
-            {result.outcome.valid_ballots} suffrage(s) exprimé(s) sur {result.outcome.total_ballots}
+            Méthode {METHOD_COPY[result.voting_method_id]?.label ?? result.voting_method_id} v
+            {result.voting_method_version} · {result.outcome.valid_ballots} suffrage(s) exprimé(s) sur{" "}
+            {result.outcome.total_ballots}
           </p>
-          <ul className="mt-3 flex flex-col gap-2">
-            {Object.entries(result.outcome.percentages)
-              .sort(([, a], [, b]) => b - a)
-              .map(([option, pct]) => (
-                <li key={option}>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className={result.outcome.winners.includes(option) ? "font-medium text-ink" : "text-ink-soft"}>
-                      {option}
-                      {result.outcome.winners.includes(option) && " — gagnant"}
-                    </span>
-                    <span className="text-muted">{pct.toFixed(1)}%</span>
-                  </div>
-                  <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-line/60">
-                    <div
-                      className="h-full bg-accent"
-                      style={{ width: `${Math.min(100, Math.max(0, pct))}%` }}
-                    />
-                  </div>
-                </li>
-              ))}
-          </ul>
+          <div className="mt-3">
+            <BarList
+              items={Object.entries(result.outcome.percentages)
+                .sort(([, a], [, b]) => b - a)
+                .map(([option, pct]) => ({
+                  key: option,
+                  label: option,
+                  value: pct,
+                  highlighted: result.outcome.winners.includes(option),
+                }))}
+            />
+          </div>
           {result.outcome.quorum_met !== null && result.outcome.quorum_met !== undefined && (
             <p className="mt-3 text-xs text-muted">
               Quorum {result.outcome.quorum_met ? "atteint" : "non atteint"}

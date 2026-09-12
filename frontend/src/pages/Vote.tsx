@@ -99,7 +99,7 @@ export default function Vote() {
   if (submitted) {
     return (
       <div className="mx-auto max-w-md text-center">
-        <h1 className="font-display text-2xl font-medium text-ink">Vote enregistré</h1>
+        <h1 className="text-2xl font-semibold text-ink">Vote enregistré</h1>
         <p className="mt-3 text-sm text-ink-soft">Merci pour votre participation.</p>
       </div>
     );
@@ -110,55 +110,70 @@ export default function Vote() {
   const multiple = "options" in question.question_type && question.question_type.type === "multiple_choice";
   const options =
     "options" in question.question_type ? (question.question_type.options as { id: string; labels: Record<string, string> }[]) : [];
+  const percent = Math.round((questionPosition / questionCount) * 100);
 
   return (
-    <div className="mx-auto max-w-lg">
-      <p className="text-xs font-medium uppercase tracking-wide text-muted">
-        Question {questionPosition} sur {questionCount}
-      </p>
-      <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-line/60">
-        <div
-          className="h-full bg-accent transition-all"
-          style={{ width: `${(questionPosition / questionCount) * 100}%` }}
-        />
+    <div className="mx-auto grid max-w-3xl gap-8 lg:grid-cols-[1.3fr_1fr] lg:items-center">
+      <div>
+        <div className="flex items-center justify-between text-xs font-medium uppercase tracking-wide text-muted">
+          <span>
+            Question {questionPosition} sur {questionCount}
+          </span>
+          <span>{percent}%</span>
+        </div>
+        <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-line/60">
+          <div
+            className="h-full bg-accent transition-all"
+            style={{ width: `${percent}%` }}
+          />
+        </div>
+
+        <h1 className="mt-6 text-2xl font-semibold leading-snug text-ink">
+          {question.prompt.fr}
+        </h1>
+
+        <Card className="mt-6">
+          <fieldset className="flex flex-col gap-3">
+            <legend className="sr-only">Options de réponse</legend>
+            {options.map((option) => (
+              <label
+                key={option.id}
+                className="flex cursor-pointer items-center gap-3 rounded-md border border-line px-4 py-3 text-sm has-checked:border-accent has-checked:bg-accent-soft"
+              >
+                <input
+                  type={multiple ? "checkbox" : "radio"}
+                  name="option"
+                  checked={selected.includes(option.id)}
+                  onChange={() => toggleOption(option.id, multiple)}
+                />
+                <span className="text-ink">{option.labels.fr}</span>
+              </label>
+            ))}
+          </fieldset>
+
+          {error && (
+            <div className="mt-4">
+              <Alert>{error}</Alert>
+            </div>
+          )}
+
+          <Button
+            className="mt-6 w-full"
+            onClick={handleSubmit}
+            disabled={selected.length === 0 || submitting}
+          >
+            {submitting ? "Envoi…" : "Voter"}
+          </Button>
+        </Card>
       </div>
 
-      <h1 className="mt-6 font-display text-2xl font-medium leading-snug text-ink">
-        {question.prompt.fr}
-      </h1>
-
-      <Card className="mt-6">
-        <fieldset className="flex flex-col gap-3">
-          <legend className="sr-only">Options de réponse</legend>
-          {options.map((option) => (
-            <label
-              key={option.id}
-              className="flex cursor-pointer items-center gap-3 rounded-md border border-line px-4 py-3 text-sm has-checked:border-accent has-checked:bg-accent-soft"
-            >
-              <input
-                type={multiple ? "checkbox" : "radio"}
-                name="option"
-                checked={selected.includes(option.id)}
-                onChange={() => toggleOption(option.id, multiple)}
-              />
-              <span className="text-ink">{option.labels.fr}</span>
-            </label>
-          ))}
-        </fieldset>
-
-        {error && (
-          <div className="mt-4">
-            <Alert>{error}</Alert>
-          </div>
-        )}
-
-        <Button
-          className="mt-6 w-full"
-          onClick={handleSubmit}
-          disabled={selected.length === 0 || submitting}
-        >
-          {submitting ? "Envoi…" : "Voter"}
-        </Button>
+      <Card className="hidden bg-accent-soft text-center lg:block">
+        <p className="text-4xl">🗳️</p>
+        <p className="mt-4 font-medium text-ink">Votre participation est importante !</p>
+        <p className="mt-2 text-sm text-ink-soft">
+          Cette consultation utilise une méthode de calcul transparente — le résultat
+          sera expliqué, pas seulement affiché.
+        </p>
       </Card>
     </div>
   );

@@ -12,17 +12,17 @@ export function Shell({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen bg-paper text-ink">
       <header className="border-b border-line bg-surface">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
-          <Link to="/" className="font-display text-lg font-medium text-ink">
+        <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-4 sm:px-6">
+          <Link to="/" className="shrink-0 font-display text-lg font-medium text-ink">
             AgoraVote
           </Link>
-          <nav className="flex items-center gap-4 text-sm">
+          <nav className="flex items-center gap-3 text-sm sm:gap-4">
             {status === "authenticated" && user ? (
               <>
-                <Link to="/admin" className="text-ink-soft hover:text-ink">
+                <Link to="/admin" className="hidden text-ink-soft hover:text-ink sm:inline">
                   Tableau de bord
                 </Link>
-                <span className="text-muted">{user.display_name}</span>
+                <span className="hidden text-muted sm:inline">{user.display_name}</span>
                 <Button variant="secondary" onClick={() => logout()}>
                   Se déconnecter
                 </Button>
