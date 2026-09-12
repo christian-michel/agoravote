@@ -1,0 +1,11 @@
+# Rust
+/target/
+crates/agoravote-g1/target/
+
+# Node / frontend
+frontend/node_modules/
+frontend/dist/
+
+# Environnement local
+.env
+.env.local
