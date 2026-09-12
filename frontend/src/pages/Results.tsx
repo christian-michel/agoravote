@@ -2,16 +2,12 @@ import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { api, ApiError, type ResultSet } from "../api/client";
 import { Alert, Card } from "../components/ui";
-import { BarList, Donut, ParticipationGauge } from "../components/charts";
-import { InfoIcon, ShareIcon } from "../components/icons";
-import { METHOD_COPY } from "../lib/methodCopy";
 
 export default function Results() {
   const { campaignId, questionId } = useParams<{ campaignId: string; questionId: string }>();
   const [result, setResult] = useState<ResultSet | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [methodologyOpen, setMethodologyOpen] = useState(false);
 
   useEffect(() => {
     if (!campaignId || !questionId) return;
@@ -39,92 +35,51 @@ export default function Results() {
   }
 
   const sorted = Object.entries(result.outcome.percentages).sort(([, a], [, b]) => b - a);
-  const expressedRate =
-    result.outcome.total_ballots > 0
-      ? (result.outcome.valid_ballots / result.outcome.total_ballots) * 100
-      : 0;
-  const method = METHOD_COPY[result.voting_method_id];
-
-  async function handleShare() {
-    if (navigator.share) {
-      await navigator.share({ url: window.location.href, title: "Résultats AgoraVote" }).catch(() => {});
-    } else {
-      await navigator.clipboard.writeText(window.location.href).catch(() => {});
-    }
-  }
 
   return (
-    <div className="mx-auto flex max-w-3xl flex-col gap-6">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <p className="text-xs font-medium uppercase tracking-wide text-muted">Résultats en direct</p>
-          <h1 className="mt-1 text-2xl font-semibold text-ink">
-            {result.outcome.winners.length > 0 ? result.outcome.winners.join(", ") : "Aucun gagnant"}
-          </h1>
-        </div>
-        <button
-          type="button"
-          onClick={handleShare}
-          className="flex shrink-0 items-center gap-2 rounded-md border border-line bg-surface px-3 py-2 text-xs text-ink-soft hover:border-accent"
-        >
-          <ShareIcon width={16} height={16} /> Partager
-        </button>
-      </div>
+    <div className="mx-auto max-w-lg">
+      <p className="text-xs font-medium uppercase tracking-wide text-muted">Résultat</p>
+      <h1 className="mt-2 font-display text-2xl font-medium text-ink">
+        {result.outcome.winners.length > 0 ? result.outcome.winners.join(", ") : "Aucun gagnant"}
+      </h1>
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Card>
-          <ParticipationGauge
-            percent={expressedRate}
-            label="Suffrages exprimés"
-            sublabel={`${result.outcome.valid_ballots} sur ${result.outcome.total_ballots} bulletin(s) reçu(s)`}
-          />
-        </Card>
-        <Card>
-          <Donut
-            slices={sorted.map(([option, pct]) => ({ key: option, label: option, value: pct }))}
-          />
-        </Card>
-      </div>
-
-      <Card>
-        <h2 className="font-medium text-ink">Résultats par option</h2>
-        <div className="mt-4">
-          <BarList
-            items={sorted.map(([option, pct]) => ({
-              key: option,
-              label: option,
-              value: pct,
-              highlighted: result.outcome.winners.includes(option),
-            }))}
-          />
-        </div>
+      <Card className="mt-6">
+        <ul className="flex flex-col gap-3">
+          {sorted.map(([option, pct]) => (
+            <li key={option}>
+              <div className="flex items-center justify-between text-sm">
+                <span
+                  className={
+                    result.outcome.winners.includes(option) ? "font-medium text-ink" : "text-ink-soft"
+                  }
+                >
+                  {option}
+                </span>
+                <span className="text-muted">{pct.toFixed(1)}%</span>
+              </div>
+              <div className="mt-1 h-2 w-full overflow-hidden rounded-full bg-line/60">
+                <div
+                  className="h-full bg-accent"
+                  style={{ width: `${Math.min(100, Math.max(0, pct))}%` }}
+                />
+              </div>
+            </li>
+          ))}
+        </ul>
 
         <div className="mt-5 flex flex-wrap gap-x-6 gap-y-1 border-t border-line pt-4 text-xs text-muted">
-          <span>Méthode {method?.label ?? result.voting_method_id} v{result.voting_method_version}</span>
+          <span>
+            {result.outcome.valid_ballots} suffrage(s) exprimé(s) sur {result.outcome.total_ballots}{" "}
+            bulletin(s)
+          </span>
+          <span>
+            Méthode {result.voting_method_id} v{result.voting_method_version}
+          </span>
           {result.outcome.quorum_met !== null && result.outcome.quorum_met !== undefined && (
             <span>Quorum {result.outcome.quorum_met ? "atteint" : "non atteint"}</span>
           )}
         </div>
       </Card>
-
-      {method && (
-        <Card>
-          <button
-            type="button"
-            onClick={() => setMethodologyOpen((v) => !v)}
-            className="flex w-full items-center gap-2 text-left"
-          >
-            <InfoIcon width={18} height={18} className="shrink-0 text-accent" />
-            <span className="font-medium text-ink">Comprendre la méthode</span>
-            <span className="ml-auto text-xs text-muted">{methodologyOpen ? "Réduire" : "Voir l'explication"}</span>
-          </button>
-          {methodologyOpen && (
-            <p className="mt-3 text-sm text-ink-soft">
-              <strong>{method.label}</strong> — {method.description}
-            </p>
-          )}
-        </Card>
-      )}
     </div>
   );
 }
