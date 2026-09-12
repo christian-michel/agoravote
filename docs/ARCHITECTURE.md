@@ -187,22 +187,17 @@ compilation TypeScript plutôt qu'en bug silencieux à l'exécution.
 |---|---|
 | `src/api/` | Client HTTP typé + schéma généré |
 | `src/auth/AuthContext.tsx` | Session React (login/register/logout, jeton en `localStorage`, confirmation du jeton via `GET /auth/me` au chargement) |
-| `src/components/AdminLayout.tsx` | Disposition avec nav latérale pour les écrans admin (planches 1-3/5-6 du §10) — tiroir superposé sous 1024px, cf. itération 7 |
-| `src/components/Shell.tsx` | Disposition nav du haut pour les écrans publics/citoyens (accueil, connexion, vote, résultats) |
-| `src/components/charts.tsx` | Jauge de participation, liste à barres, donut — SVG inline, palette de la skill dataviz (cf. `index.css`) |
-| `src/components/icons.tsx` | Icônes trait dessinées à la main (pas de dépendance externe) |
-| `src/components/FormBuilder.tsx` | Bibliothèque de questions (six types déjà acceptés par l'API) + canevas |
-| `src/components/` (autres) | UI de base (`ui.tsx`), panneau de dépouillement (`TallyPanel.tsx`) |
-| `src/pages/` | Un fichier par écran (cf. `frontend/README.md` pour la table complète) — inclut depuis l'itération 7 `CampaignsList.tsx`, `ModulesPage.tsx` et `Analysis.tsx` |
-| `src/lib/methodCopy.ts` | Libellés/descriptions éditoriales des méthodes de vote natives, partagés entre `ModulesPage` et `TallyPanel` |
+| `src/components/` | Composants réutilisables (UI de base, constructeur de formulaire, panneau de dépouillement) |
+| `src/pages/` | Un fichier par écran (cf. `frontend/README.md` pour la table complète) |
 | `DESIGN.md` | Direction visuelle et sa justification |
 
 Compilation TypeScript, lint et build de production vérifiés verts, et
-**testé dans un vrai navigateur** (Chromium) à deux reprises : itération
-6 (première vérification, a révélé le bug `/auth/me`) et itération 7
-(refonte sur les planches UX fournies par le porteur de projet, a
-révélé et corrigé deux bugs de responsive mobile — cf. `docs/DEVLOG.md`
-pour le détail des deux itérations).
+désormais **testé dans un vrai navigateur** (Chromium, cf.
+`docs/DEVLOG.md` itération 6) : parcours complet conduit de bout en
+bout, desktop et mobile, zéro erreur console — a révélé un bug réel
+(session perdue visuellement après rechargement de page) et un
+conflit de peer-dependency npm, tous deux corrigés (cf. DEVLOG pour le
+détail).
 
 ## Ce que ce prototype ne fait pas encore
 

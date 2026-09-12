@@ -38,9 +38,8 @@ coché — l'historique de ce qui a été priorisé et quand a de la valeur.
       volée.
 
 - [ ] `GET /campaigns` (liste, filtrée par organisation) — remplace le
-      palliatif de mémorisation locale (`frontend/src/lib/recentCampaigns.ts`),
-      utilisé par le tableau de bord ET par l'écran "Campagnes" ajouté
-      en itération 7.
+      palliatif de mémorisation locale du tableau de bord frontend
+      (`frontend/src/lib/recentCampaigns.ts`).
 - [ ] Permissions fines : une campagne appartient à un organisateur
       précis (`owner_id`), pas à "tout Organizer de l'organisation".
 - [ ] Flux d'invitation d'organisateurs — aujourd'hui, `/auth/register`
@@ -56,43 +55,16 @@ coché — l'historique de ce qui a été priorisé et quand a de la valeur.
       utilisable comme oracle de test).
 - [ ] Export CSV/JSON dédié des résultats (§14 du cahier des charges) —
       aujourd'hui seul le JSON brut de l'API est disponible.
-- [ ] Câbler `agoravote-stats` (moyenne/médiane/écart-type/tableau
-      croisé) à une route API — dépendance déclarée mais jamais
-      utilisée par aucune route (vérifié par recherche dans le code,
-      cf. `docs/DEVLOG.md` itération 7), nécessaire pour enrichir
-      l'écran Analyse du frontend sans donnée fictive.
-- [ ] Attributs démographiques optionnels sur la participation (âge,
-      territoire...), si le projet veut les comparaisons par groupe de
-      la planche 6 — décision produit sur la collecte de ces données
-      (cf. §13 "minimisation" du cahier des charges) avant tout travail
-      technique, cf. `docs/DEVLOG.md` itération 7.
 
 ## Frontend
 
-- [x] **Refonte sur les planches UX fournies** (nav latérale, tableau
-      de bord, éditeur de formulaire, configuration du scrutin, vote
-      citoyen, résultats en direct, écran Analyse) — fait, cf.
-      `docs/DEVLOG.md` itération 7. A aussi corrigé deux bugs réels
-      trouvés en repassant le parcours en navigateur (nav du haut
-      cassée en mobile pour un utilisateur connecté ; nav latérale à
-      largeur fixe rendant tout le contenu admin inutilisable en
-      dessous de 1024px).
-- [x] Types de question au-delà de choix unique/multiple dans le
+- [ ] Types de question au-delà de choix unique/multiple dans le
       constructeur de formulaire (texte, nombre, échelle, classement —
-      déjà supportés côté API). Fait — cf. `docs/DEVLOG.md` itération 7.
+      déjà supportés côté API).
 - [ ] Écran de permissions/audit une fois le backend correspondant fait.
 - [ ] Affichage multilingue de l'interface elle-même (le contenu des
       campagnes l'est déjà côté modèle — `prompt`/`labels` par langue
       — mais l'interface n'affiche que `fr`).
-- [ ] Écran "Utilisateurs" et écran "Paramètres" (nav latérale
-      `AdminLayout`, affichés grisés avec un badge "Bientôt" depuis
-      l'itération 7, faute de backend — gestion d'utilisateurs,
-      paramètres d'organisation) — attend les items backend
-      correspondants (permissions fines, flux d'invitation).
-- [ ] Écran "Analyse" (planche 6) plus complet — démographie
-      (âge/territoire) et séries temporelles de participation,
-      volontairement non construites en itération 7 faute de données
-      réelles (cf. les deux items ci-dessous, préalables backend).
 
 ## Identité décentralisée (Ğ1v2)
 
