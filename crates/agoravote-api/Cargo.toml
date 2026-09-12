@@ -1,0 +1,34 @@
+[package]
+name = "agoravote-api"
+description = "API HTTP de démonstration exposant le noyau AgoraVote (cf. cahier des charges §12)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[[bin]]
+name = "agoravote-api"
+path = "src/main.rs"
+
+[dependencies]
+agoravote-core = { path = "../agoravote-core" }
+agoravote-voting = { path = "../agoravote-voting" }
+agoravote-stats = { path = "../agoravote-stats" }
+agoravote-store = { path = "../agoravote-store" }
+agoravote-auth = { path = "../agoravote-auth" }
+serde.workspace = true
+serde_json.workspace = true
+uuid.workspace = true
+chrono.workspace = true
+thiserror.workspace = true
+axum = "0.7"
+axum-extra = { version = "0.9", default-features = false, features = ["typed-header"] }
+async-trait = "0.1"
+encoding_rs = "=0.8.35" # versions récentes : édition Cargo 2024 (cf. note sur `sqlx` dans agoravote-store/Cargo.toml)
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal"] }
+tower-http = { version = "0.5", features = ["limit", "timeout", "trace", "catch-panic", "request-id", "util"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[dev-dependencies]
+tower = { version = "0.5", features = ["util"] }

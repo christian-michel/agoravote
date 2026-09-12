@@ -1,0 +1,684 @@
+openapi: 3.0.3
+info:
+  title: AgoraVote API
+  description: >
+    API HTTP du noyau AgoraVote — cf. cahier des charges §12.
+    Cette spécification documente l'API TELLE QU'ELLE EXISTE dans le code
+    (crates/agoravote-api/src/routes.rs), pas un objectif futur. Toute
+    évolution de l'API doit se refléter ici.
+  version: "0.5.0"
+  license:
+    name: AGPL-3.0-or-later
+
+servers:
+  - url: http://localhost:3000
+    description: Développement local / Docker
+
+tags:
+  - name: auth
+    description: Inscription, connexion, déconnexion (§13)
+  - name: campaigns
+    description: Cycle de vie d'une campagne (écrans 01/02)
+  - name: forms
+    description: Formulaire d'une campagne (écran 03)
+  - name: ballots
+    description: Vote citoyen (écran 09)
+  - name: results
+    description: Dépouillement et résultats (écrans 06/11)
+  - name: modules
+    description: Catalogue des méthodes de vote installées (écran 16)
+  - name: system
+    description: Santé du service
+
+security:
+  - bearerAuth: []
+
+paths:
+  /health:
+    get:
+      tags: [system]
+      summary: Vérifie que le service répond
+      security: []
+      responses:
+        "200":
+          description: Service opérationnel
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: ok
+
+  /modules:
+    get:
+      tags: [modules]
+      summary: Liste les méthodes de vote installées avec leur manifeste
+      security: []
+      responses:
+        "200":
+          description: Catalogue des modules
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  voting_methods:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ModuleManifest"
+
+  /auth/register:
+    post:
+      tags: [auth]
+      summary: Crée un compte (rôle Organizer par défaut) et ouvre une session
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+      responses:
+        "200":
+          description: Compte créé, session ouverte
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          description: Email invalide, mot de passe trop court, ou email déjà utilisé
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/login:
+    post:
+      tags: [auth]
+      summary: Connexion par email/mot de passe
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Session ouverte
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "401":
+          description: Email ou mot de passe incorrect (message volontairement générique, cf. docs/SECURITY.md §7)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/logout:
+    post:
+      tags: [auth]
+      summary: Ferme la session associée au jeton présenté
+      responses:
+        "204":
+          description: Session fermée
+        "401":
+          description: Jeton absent ou invalide
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /campaigns:
+    post:
+      tags: [campaigns]
+      summary: Crée une campagne (rôle Organizer/Admin requis)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCampaignRequest"
+      responses:
+        "200":
+          description: Campagne créée (statut Draft)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Campaign"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /campaigns/{campaignId}:
+    get:
+      tags: [campaigns]
+      summary: Consulte une campagne (public)
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/CampaignId"
+      responses:
+        "200":
+          description: Campagne trouvée
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Campaign"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /campaigns/{campaignId}/form:
+    get:
+      tags: [forms]
+      summary: Consulte le formulaire d'une campagne (public — nécessaire pour afficher les questions avant de voter)
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/CampaignId"
+      responses:
+        "200":
+          description: Formulaire trouvé
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Form"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      tags: [forms]
+      summary: Crée le formulaire d'une campagne (une seule fois, rôle Organizer/Admin requis)
+      parameters:
+        - $ref: "#/components/parameters/CampaignId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateFormRequest"
+      responses:
+        "200":
+          description: Formulaire créé
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Form"
+        "400":
+          description: Un formulaire existe déjà pour cette campagne
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /campaigns/{campaignId}/publish:
+    post:
+      tags: [campaigns]
+      summary: Publie une campagne (Draft → Published), rôle Organizer/Admin requis
+      parameters:
+        - $ref: "#/components/parameters/CampaignId"
+      responses:
+        "200":
+          description: Campagne publiée
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Campaign"
+        "400":
+          description: Transition invalide (ex. pas de formulaire)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /campaigns/{campaignId}/close:
+    post:
+      tags: [campaigns]
+      summary: Clôture une campagne (Published → Closed), rôle Organizer/Admin requis
+      parameters:
+        - $ref: "#/components/parameters/CampaignId"
+      responses:
+        "200":
+          description: Campagne clôturée
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Campaign"
+        "400":
+          description: Transition invalide
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /campaigns/{campaignId}/questions/{questionId}/ballots:
+    post:
+      tags: [ballots]
+      summary: >
+        Soumet un bulletin. Authentification OPTIONNELLE : sans jeton, vote
+        anonyme (comportement historique) ; avec un jeton valide, le vote est
+        nominatif et un second vote sur la même question est refusé.
+      security:
+        - bearerAuth: []
+        - {}
+      parameters:
+        - $ref: "#/components/parameters/CampaignId"
+        - $ref: "#/components/parameters/QuestionId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CastBallotRequest"
+      responses:
+        "200":
+          description: Bulletin enregistré
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Ballot"
+        "400":
+          description: Campagne fermée, ou double vote d'un participant identifié
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /campaigns/{campaignId}/questions/{questionId}/tally:
+    post:
+      tags: [results]
+      summary: Lance un dépouillement avec la méthode de vote indiquée, rôle Organizer/Admin requis
+      parameters:
+        - $ref: "#/components/parameters/CampaignId"
+        - $ref: "#/components/parameters/QuestionId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TallyRequest"
+      responses:
+        "200":
+          description: Résultat calculé et enregistré
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ResultSet"
+        "400":
+          description: Méthode de vote inconnue ou aucun bulletin à dépouiller
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /campaigns/{campaignId}/questions/{questionId}/results:
+    get:
+      tags: [results]
+      summary: Consulte le dernier résultat calculé pour cette question (public)
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/CampaignId"
+        - $ref: "#/components/parameters/QuestionId"
+      responses:
+        "200":
+          description: Résultat trouvé
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ResultSet"
+        "404":
+          description: Aucun résultat calculé pour cette question
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: "Jeton obtenu via /auth/register ou /auth/login, à passer dans l'en-tête Authorization: Bearer <jeton>"
+
+  parameters:
+    CampaignId:
+      name: campaignId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    QuestionId:
+      name: questionId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+  responses:
+    Unauthorized:
+      description: Jeton absent, invalide ou expiré
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Forbidden:
+      description: Authentifié mais rôle insuffisant (Organizer/Admin requis)
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    NotFound:
+      description: Ressource introuvable
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required: [error]
+
+    ModuleManifest:
+      type: object
+      required: [id, version, kind, inputs, parameters, outputs, compatible_visualizations]
+      properties:
+        id:
+          type: string
+          example: voting.majority
+        version:
+          type: string
+          example: "1.0.0"
+        kind:
+          type: string
+          example: voting_method
+        inputs:
+          type: array
+          items: { type: string }
+        parameters:
+          type: array
+          items: { type: string }
+        outputs:
+          type: array
+          items: { type: string }
+        compatible_visualizations:
+          type: array
+          items: { type: string }
+
+    RegisterRequest:
+      type: object
+      required: [organization_id, email, password, display_name]
+      properties:
+        organization_id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        password: { type: string, minLength: 8 }
+        display_name: { type: string }
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string }
+
+    AuthResponse:
+      type: object
+      required: [token, user]
+      properties:
+        token:
+          type: string
+          description: Jeton de session en clair — à conserver côté client, ne transite plus après cette réponse
+        user:
+          $ref: "#/components/schemas/User"
+
+    User:
+      type: object
+      required: [id, organization_id, display_name, roles]
+      properties:
+        id: { type: string, format: uuid }
+        organization_id: { type: string, format: uuid }
+        display_name: { type: string }
+        preferred_language: { type: string, nullable: true }
+        roles:
+          type: array
+          items:
+            type: string
+            enum: [Admin, Organizer, Voter, Auditor]
+
+    CreateCampaignRequest:
+      type: object
+      required: [organization_id, title]
+      properties:
+        organization_id: { type: string, format: uuid }
+        title: { type: string }
+
+    Campaign:
+      type: object
+      required: [id, organization_id, title, status, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        organization_id: { type: string, format: uuid }
+        title: { type: string }
+        status: { type: string, enum: [Draft, Published, Closed] }
+        form_id: { type: string, format: uuid, nullable: true }
+        voting_method_id: { type: string, nullable: true }
+        voting_method_version: { type: string, nullable: true }
+        created_at: { type: string, format: date-time }
+        published_at: { type: string, format: date-time, nullable: true }
+        closed_at: { type: string, format: date-time, nullable: true }
+
+    QuestionOption:
+      type: object
+      required: [id, labels]
+      properties:
+        id: { type: string }
+        labels:
+          type: object
+          additionalProperties: { type: string }
+          example: { fr: "Améliorer les transports publics" }
+
+    CreateQuestionRequest:
+      type: object
+      required: [prompt, type]
+      properties:
+        prompt: { type: string }
+        type:
+          type: string
+          enum: [single_choice, multiple_choice, text, number, scale, ranking]
+        required: { type: boolean, default: false }
+        options:
+          type: array
+          items: { $ref: "#/components/schemas/QuestionOption" }
+        max_selections: { type: integer, nullable: true }
+        max_length: { type: integer, nullable: true }
+        min: { type: number, nullable: true }
+        max: { type: number, nullable: true }
+
+    CreateFormRequest:
+      type: object
+      required: [questions]
+      properties:
+        questions:
+          type: array
+          items: { $ref: "#/components/schemas/CreateQuestionRequest" }
+
+    # Union discriminée par `type`, reflétant l'enum Rust `QuestionType`
+    # (cf. crates/agoravote-core/src/form.rs, #[serde(tag = "type")]) —
+    # permet au frontend de distinguer `single_choice`/`multiple_choice`
+    # (qui portent des options) des autres variantes par vérification de
+    # type, sans caster à l'aveugle.
+    QuestionTypeSingleChoice:
+      type: object
+      required: [type, options]
+      properties:
+        type: { type: string, enum: [single_choice] }
+        options:
+          type: array
+          items: { $ref: "#/components/schemas/QuestionOption" }
+    QuestionTypeMultipleChoice:
+      type: object
+      required: [type, options]
+      properties:
+        type: { type: string, enum: [multiple_choice] }
+        options:
+          type: array
+          items: { $ref: "#/components/schemas/QuestionOption" }
+        max_selections: { type: integer, nullable: true }
+    QuestionTypeText:
+      type: object
+      required: [type]
+      properties:
+        type: { type: string, enum: [text] }
+        max_length: { type: integer, nullable: true }
+    QuestionTypeNumber:
+      type: object
+      required: [type]
+      properties:
+        type: { type: string, enum: [number] }
+        min: { type: number, nullable: true }
+        max: { type: number, nullable: true }
+    QuestionTypeScale:
+      type: object
+      required: [type, min, max]
+      properties:
+        type: { type: string, enum: [scale] }
+        min: { type: integer }
+        max: { type: integer }
+    QuestionTypeRanking:
+      type: object
+      required: [type, options]
+      properties:
+        type: { type: string, enum: [ranking] }
+        options:
+          type: array
+          items: { $ref: "#/components/schemas/QuestionOption" }
+    QuestionType:
+      oneOf:
+        - $ref: "#/components/schemas/QuestionTypeSingleChoice"
+        - $ref: "#/components/schemas/QuestionTypeMultipleChoice"
+        - $ref: "#/components/schemas/QuestionTypeText"
+        - $ref: "#/components/schemas/QuestionTypeNumber"
+        - $ref: "#/components/schemas/QuestionTypeScale"
+        - $ref: "#/components/schemas/QuestionTypeRanking"
+
+    Question:
+      type: object
+      required: [id, form_id, prompt, question_type, required, position]
+      properties:
+        id: { type: string, format: uuid }
+        form_id: { type: string, format: uuid }
+        prompt:
+          type: object
+          additionalProperties: { type: string }
+        question_type:
+          $ref: "#/components/schemas/QuestionType"
+        required: { type: boolean }
+        position: { type: integer }
+
+    Form:
+      type: object
+      required: [id, campaign_id, questions]
+      properties:
+        id: { type: string, format: uuid }
+        campaign_id: { type: string, format: uuid }
+        questions:
+          type: array
+          items: { $ref: "#/components/schemas/Question" }
+
+    CastBallotRequest:
+      type: object
+      properties:
+        voter_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: Ignoré si un jeton d'authentification valide est fourni (l'identité du jeton prévaut toujours)
+        selections:
+          type: array
+          items: { type: string }
+        scores:
+          type: object
+          additionalProperties: { type: number }
+          nullable: true
+
+    Ballot:
+      type: object
+      required: [id, campaign_id, question_id, selections, cast_at]
+      properties:
+        id: { type: string, format: uuid }
+        campaign_id: { type: string, format: uuid }
+        question_id: { type: string, format: uuid }
+        voter_id: { type: string, format: uuid, nullable: true }
+        selections:
+          type: array
+          items: { type: string }
+        scores:
+          type: object
+          additionalProperties: { type: number }
+          nullable: true
+        numeric_value: { type: number, nullable: true }
+        text_value: { type: string, nullable: true }
+        cast_at: { type: string, format: date-time }
+
+    TallyRequest:
+      type: object
+      required: [voting_method_id]
+      properties:
+        voting_method_id:
+          type: string
+          example: voting.majority
+        eligible_voters: { type: integer, nullable: true }
+        quorum: { type: number, nullable: true, description: "Fraction 0.0–1.0" }
+        seats: { type: integer, default: 1 }
+
+    TallyOutcome:
+      type: object
+      required: [total_ballots, valid_ballots, winners, percentages, counts, metadata]
+      properties:
+        total_ballots: { type: integer }
+        valid_ballots: { type: integer }
+        winners:
+          type: array
+          items: { type: string }
+        percentages:
+          type: object
+          additionalProperties: { type: number }
+        counts:
+          type: object
+          additionalProperties: { type: number }
+        quorum_met: { type: boolean, nullable: true }
+        metadata:
+          type: object
+          additionalProperties: true
+
+    ResultSet:
+      type: object
+      required: [id, campaign_id, question_id, voting_method_id, voting_method_version, outcome, computed_at]
+      properties:
+        id: { type: string, format: uuid }
+        campaign_id: { type: string, format: uuid }
+        question_id: { type: string, format: uuid }
+        voting_method_id: { type: string }
+        voting_method_version: { type: string }
+        outcome: { $ref: "#/components/schemas/TallyOutcome" }
+        computed_at: { type: string, format: date-time }

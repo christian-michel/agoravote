@@ -1,0 +1,26 @@
+[package]
+name = "agoravote-auth"
+description = "Hachage de mot de passe et gestion de sessions pour AgoraVote (cf. cahier des charges §13)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+agoravote-core = { path = "../agoravote-core" }
+chrono.workspace = true
+thiserror.workspace = true
+sha2 = "0.10"
+
+# Épinglages pour compatibilité avec la toolchain rustc 1.75 de cet
+# environnement de développement (cf. la note détaillée sur `sqlx`
+# dans `crates/agoravote-store/Cargo.toml` — même famille de problème :
+# des dépendances transitives de l'écosystème RustCrypto ont depuis
+# relevé leur exigence de compilateur ou d'édition Cargo). Aucune
+# conséquence sur l'image Docker de production (toolchain à jour).
+argon2 = "0.5"
+rand = "=0.8.5"
+rand_core = "=0.6.4"
+base64ct = "=1.6.0"
+
+[dev-dependencies]

@@ -1,0 +1,65 @@
+[package]
+name = "agoravote-store"
+description = "Persistance d'AgoraVote : backend mémoire (tests, MVP local) et backend PostgreSQL (cf. cahier des charges §12.2)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+agoravote-core = { path = "../agoravote-core" }
+serde.workspace = true
+serde_json.workspace = true
+uuid.workspace = true
+chrono.workspace = true
+thiserror.workspace = true
+tracing = "0.1"
+
+# `query`/`query_as` (API à l'exécution) plutôt que les macros
+# `query!`/`query_as!` (vérifiées à la compilation) : ces dernières
+# exigent soit une base de données accessible pendant `cargo build`,
+# soit un cache `.sqlx/` préparé à l'avance et tenu à jour à chaque
+# changement de requête — un couplage que l'on juge disproportionné
+# pour la taille actuelle du projet. Le prix payé : une erreur de nom
+# de colonne ne serait détectée qu'au premier appel, pas à la
+# compilation — compensé par les tests d'intégration de ce crate, qui
+# exercent chaque requête contre une vraie base (cf. `tests/`).
+#
+# Version 0.6 plutôt que 0.7/0.8 : contrainte de toolchain locale
+# (rustc 1.75 via apt, cf. Cargo.toml racine). Les versions plus
+# récentes de sqlx tirent, à cette date, des dépendances transitives
+# (`base64ct`, `rand_core`, `idna`...) qui exigent soit l'édition
+# Cargo 2024, soit un rustc bien plus récent (1.80+). sqlx 0.6 reste
+# fonctionnellement complet pour ce crate (requêtes, transactions,
+# JSONB, migrations) ; à réévaluer si la toolchain de développement
+# est mise à jour. AUCUNE de ces contraintes ne s'applique à l'image
+# Docker de production (`Dockerfile`), qui utilise un rustc à jour —
+# seul le développement dans CE bac à sable est concerné.
+sqlx = { version = "0.6", default-features = false, features = [
+    "runtime-tokio-native-tls",
+    "postgres",
+    "uuid",
+    "chrono",
+    "json",
+    "migrate",
+    "macros",
+    "offline",
+] }
+
+# Épinglages transitifs requis par la contrainte ci-dessus (chacun
+# bloquait la compilation avec rustc 1.75 pour une raison différente :
+# édition 2024, ou MSRV relevée à 1.80/1.85). Documentés individuellement
+# pour qu'un futur contributeur sache lesquels retirer une fois la
+# toolchain de développement mise à jour.
+idna_adapter = "=1.1.0"       # versions récentes : édition Cargo 2024
+native-tls = "=0.2.11"         # versions récentes : MSRV 1.80
+openssl = "=0.10.66"           # versions récentes : MSRV 1.80
+openssl-sys = "=0.9.103"       # suit le pin ci-dessus
+unicode-segmentation = "=1.10.1" # versions récentes : MSRV 1.85
+idna = "=0.5.0"                 # versions récentes : nécessite core::error::Error (rustc 1.81+)
+url = "=2.5.2"                  # compatible avec le pin idna ci-dessus
+crc = "=3.0.1"                  # versions récentes : MSRV 1.83 (utilisé par sqlx::migrate pour les checksums de migration)
+
+[dev-dependencies]
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+agoravote-auth = { path = "../agoravote-auth" }

@@ -1,0 +1,41 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/agoravote-core",
+    "crates/agoravote-voting",
+    "crates/agoravote-stats",
+    "crates/agoravote-store",
+    "crates/agoravote-auth",
+    "crates/agoravote-api",
+]
+# `crates/agoravote-g1` est VOLONTAIREMENT exclu de cette liste — cf.
+# `crates/agoravote-g1/README.md`. Son arbre de dépendances
+# (cryptographie Substrate) ne compile pas avec la toolchain de
+# développement de cet environnement (rustc 1.75), et un workspace
+# Cargo résout un seul `Cargo.lock` pour TOUS ses membres : y inclure
+# ce crate ferait échouer `cargo build --workspace` pour tout le
+# monde, pas seulement pour lui. Il reste un crate Rust valide,
+# buildable indépendamment (`cargo build --manifest-path
+# crates/agoravote-g1/Cargo.toml`) dans un environnement à toolchain
+# à jour, avec son propre `Cargo.lock` séparé.
+
+# Métadonnées partagées par tous les crates du workspace.
+# cf. cahier des charges §12 "Architecture technique cible" :
+#   le noyau métier (core, voting, stats) est en Rust ; l'API expose
+#   ce noyau au reste du système (web, CLI, etc.) via HTTP/JSON.
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "AGPL-3.0-or-later" # à confirmer par la gouvernance du projet, cf. §17
+authors = ["AgoraVote contributors"]
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# Version épinglée : les versions plus récentes d'uuid tirent une
+# version de `getrandom` qui exige l'édition Cargo 2024, indisponible
+# avec la toolchain rustc 1.75 fournie par apt sur cette machine de
+# développement. À réévaluer quand la toolchain sera mise à jour.
+uuid = { version = "=1.10.0", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+thiserror = "1"

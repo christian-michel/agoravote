@@ -1,0 +1,93 @@
+# docker-compose.yml — cf. docs/DOCKER.md pour le guide complet
+# (installation sur Zorin OS 18, dépannage, etc.)
+#
+# Trois services : `db` (PostgreSQL, persistance réelle — cf. cahier
+# des charges §12.2), `api` et `frontend` (interface React, servie par
+# Nginx qui proxifie /api/* vers `api` — cf. frontend/nginx.conf). Le
+# service `api` n'utilise `db` que si `DATABASE_URL` lui est fournie ;
+# sans elle, il retombe sur son backend en mémoire (cf.
+# `agoravote-store`, mode "auto-hébergement / exécution locale" du
+# §1.1) — mais ce fichier active PostgreSQL par défaut, car c'est le
+# mode qu'on veut pour un usage réel. Une fois les trois services
+# démarrés, ouvrez http://localhost:8080 dans un navigateur.
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: agoravote-db
+    environment:
+      POSTGRES_USER: agoravote
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-agoravote}
+      POSTGRES_DB: agoravote
+    volumes:
+      # Volume nommé : les données survivent à `docker compose down`
+      # (mais pas à `docker compose down -v`, qui les supprime
+      # explicitement — cf. docs/DOCKER.md pour la distinction).
+      - agoravote-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agoravote -d agoravote"]
+      interval: 5s
+      timeout: 3s
+      start_period: 5s
+      retries: 10
+    restart: unless-stopped
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: agoravote-api:local
+    container_name: agoravote-api
+    depends_on:
+      # `service_healthy`, pas juste `service_started` : l'API
+      # n'essaie de se connecter à PostgreSQL qu'une fois que
+      # `pg_isready` confirme que la base accepte des connexions, pas
+      # seulement que le conteneur a démarré (le serveur PostgreSQL
+      # met un instant à être prêt après son propre démarrage).
+      db:
+        condition: service_healthy
+    ports:
+      # host:conteneur — changez le port hôte (à gauche) si 3000 est
+      # déjà utilisé sur votre machine, ex: "8080:3000".
+      - "3000:3000"
+    environment:
+      # Cf. docs/LOGGING.md pour la syntaxe complète de RUST_LOG.
+      RUST_LOG: ${RUST_LOG:-info,agoravote_api=info,agoravote_core=info,agoravote_voting=info,agoravote_stats=info,agoravote_store=info}
+      # `db` est le nom du service ci-dessus : docker compose le
+      # résout automatiquement en adresse IP interne au réseau du
+      # projet, pas besoin de connaître l'IP réelle du conteneur.
+      DATABASE_URL: postgres://agoravote:${POSTGRES_PASSWORD:-agoravote}@db/agoravote
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:3000/health"]
+      interval: 10s
+      timeout: 3s
+      start_period: 5s
+      retries: 3
+
+  frontend:
+    build:
+      # Contexte = racine du dépôt (pas frontend/ seul) : la
+      # construction a besoin de docs/openapi.yaml, qui vit à côté de
+      # frontend/ — cf. frontend/Dockerfile pour le détail.
+      context: .
+      dockerfile: frontend/Dockerfile
+    image: agoravote-frontend:local
+    container_name: agoravote-frontend
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      # host:conteneur — c'est ici que vous ouvrez l'application dans
+      # un navigateur : http://localhost:8080
+      - "8080:80"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--spider", "http://localhost/"]
+      interval: 10s
+      timeout: 3s
+      start_period: 5s
+      retries: 3
+
+volumes:
+  agoravote-db-data:
