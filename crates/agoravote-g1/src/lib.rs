@@ -7,31 +7,37 @@
 //!
 //! ## ⚠️ Statut de vérification — à lire avant toute utilisation
 //!
-//! **Mise à jour** (cf. `docs/DEVLOG.md`, itération 6) : compilé avec
-//! succès dans un environnement à toolchain Rust à jour (rustc 1.94).
-//! [`challenge`] et [`signature`] sont désormais compilés **et
-//! testés** (9 tests verts, `cargo test -p agoravote-g1 --features
-//! chain-query`), au même niveau d'exigence que le reste du projet
-//! (`agoravote-core`, `agoravote-voting`, `agoravote-stats`,
-//! `agoravote-store`, `agoravote-auth`). [`chain`] compile également
-//! mais **reste non vérifié à l'exécution** : l'infrastructure réseau
-//! Duniter/Ğ1 reste bloquée par la liste blanche réseau de cet
-//! environnement (testé à nouveau, toujours bloqué) — les noms de
-//! stockage qu'il interroge (`IdentityIndexOf`, `Membership`) restent
-//! des hypothèses non confirmées contre un nœud réel.
+//! [`challenge`] et [`signature`] sont compilés, testés (13 tests
+//! verts, `cargo test -p agoravote-g1 --features chain-query`) et
+//! câblés en production dans `agoravote-api` depuis l'itération 8 (cf.
+//! `docs/DEVLOG.md`). [`chain`] compile également mais **reste non
+//! vérifié à l'exécution ni câblé à aucune route** : l'infrastructure
+//! réseau Duniter/Ğ1 reste bloquée par la liste blanche réseau de tout
+//! environnement de développement utilisé jusqu'ici (testé à nouveau,
+//! toujours bloqué) — les noms de stockage qu'il interroge
+//! (`IdentityIndexOf`, `Membership`) restent des hypothèses non
+//! confirmées contre un nœud réel.
+//!
+//! **Correctif important (itération 9)** : [`signature`] vérifie des
+//! signatures **ed25519**, pas sr25519 comme une version antérieure le
+//! faisait par erreur — cf. l'avertissement en tête de
+//! `signature.rs`. Cette correction s'appuie sur des recherches web
+//! (le forum et le dépôt git de Duniter restent bloqués par la même
+//! liste blanche réseau que `chain.rs`), pas sur une lecture directe
+//! de la documentation officielle : à reconfirmer avant une mise en
+//! production.
 //!
 //! **Avant toute utilisation de [`chain::check_membership`]** :
 //! confirmer les noms de stockage contre un vrai nœud `gdev` (réseau
 //! de test — jamais `g1` directement) depuis un environnement qui a
-//! accès à l'infrastructure Duniter, puis réintégrer ce crate au
-//! workspace principal (cf. `crates/agoravote-g1/README.md` pour la
-//! marche à suivre complète).
+//! accès à l'infrastructure Duniter — cf. `crates/agoravote-g1/README.md`
+//! pour la marche à suivre complète.
 //!
 //! ## Organisation
 //!
 //! - [`challenge`] — génération d'un défi aléatoire à signer (pur, ne
 //!   nécessite aucune dépendance réseau).
-//! - [`signature`] — vérification qu'une signature sr25519 correspond
+//! - [`signature`] — vérification qu'une signature ed25519 correspond
 //!   bien à une clé publique donnée pour un message donné (pur,
 //!   cryptographie hors-ligne — **jamais** la phrase de 12 mots,
 //!   cf. sa documentation).

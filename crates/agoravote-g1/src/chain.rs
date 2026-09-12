@@ -66,7 +66,7 @@ pub struct MembershipStatus {
 
 /// Se connecte à un nœud Duniter v2 et vérifie le statut d'adhésion
 /// d'un compte, identifié par les octets bruts de sa clé publique
-/// sr25519 (32 octets — les mêmes octets que pour
+/// ed25519 (32 octets — les mêmes octets que pour
 /// [`crate::signature::verify_signature`] ; c'est la même clé qui
 /// prouve la possession ET identifie le compte sur la chaîne).
 ///

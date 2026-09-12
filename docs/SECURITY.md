@@ -185,10 +185,31 @@ cf. `docs/ARCHITECTURE.md`) a été vérifiée contre une vraie base :
 
 ## 8. Identité Ğ1v2 optionnelle (addendum v0.3) — choix faits et limite connue
 
-Cf. `docs/G1_INTEGRATION.md` et `docs/DEVLOG.md` itération 8 pour le
+Cf. `docs/G1_INTEGRATION.md` et `docs/DEVLOG.md` itérations 8-9 pour le
 détail de l'implémentation (`POST /auth/g1/challenge`,
 `POST /auth/g1/verify`).
 
+- **⚠️ Schéma de signature : ed25519, corrigé en itération 9 — à
+  reconfirmer avant mise en production.** Une version antérieure
+  vérifiait des signatures sr25519, sur la base d'une hypothèse jamais
+  vérifiée ("c'est le défaut Substrate"). Des recherches web (le forum
+  et le dépôt git de Duniter restent bloqués par la liste blanche
+  réseau de cet environnement, comme `chain.rs` — seuls des extraits
+  de moteur de recherche ont pu être consultés) indiquent que les
+  comptes/portefeuilles Ğ1v2 réels (Ğecko, Cesium²) signent en
+  **ed25519**, le même schéma que la Ğ1 historique, pour
+  l'interopérabilité avec les outils tiers — sr25519 étant spécifique
+  à l'écosystème Polkadot sans bénéfice propre pour Duniter. Corrigé
+  dans `crates/agoravote-g1/src/signature.rs` (désormais
+  `ed25519-zebra`, pas `subxt-signer`) — cf. `docs/DEVLOG.md`
+  itération 9 pour le détail complet. Cette correction elle-même
+  n'est PAS confirmée contre une source primaire (documentation
+  officielle, ou test contre un vrai portefeuille) : la même limite
+  d'accès réseau qui empêche de vérifier `chain.rs` empêche aussi de
+  confirmer ce point avec certitude depuis cet environnement. Avant
+  toute mise en production : reconfirmer ce schéma, idéalement en
+  signant un défi réel avec un vrai portefeuille Ğ1v2 et en vérifiant
+  que `POST /auth/g1/verify` l'accepte.
 - **La phrase de 12 mots (ou toute clé privée) ne transite jamais vers
   AgoraVote.** Le protocole défi/signature (`agoravote-g1::challenge`,
   `signature`) ne reçoit et ne manipule que des clés publiques et des

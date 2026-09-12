@@ -103,7 +103,7 @@ impl Session {
 /// v0.3 du cahier des charges (« Identité décentralisée ») et la note
 /// ci-dessus sur la séparation `User`/`Account`.
 ///
-/// Ne contient que la clé **publique** (hex, 32 octets sr25519) : la
+/// Ne contient que la clé **publique** (hex, 32 octets ed25519) : la
 /// clé privée et la phrase de 12 mots d'un participant ne transitent
 /// jamais vers AgoraVote — cf. `agoravote_g1::signature`, dont la
 /// vérification de preuve de possession est le seul mécanisme par
@@ -115,7 +115,7 @@ pub struct G1Link {
     pub user_id: Id,
 
     /// Encodage hexadécimal (sans préfixe `0x`) des 32 octets de la
-    /// clé publique sr25519 — même convention que
+    /// clé publique ed25519 — même convention que
     /// `agoravote_g1::signature::decode_hex`. Unique : un compte Ğ1 ne
     /// peut être lié qu'à un seul utilisateur AgoraVote (même logique
     /// que la contrainte d'unicité d'email sur `Account`).

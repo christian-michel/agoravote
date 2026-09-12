@@ -317,7 +317,7 @@ export interface paths {
         put?: never;
         /**
          * Vérifie la signature du défi et ouvre une session (identité Ğ1v2 optionnelle)
-         * @description Seconde moitié du protocole. Retrouve l'utilisateur déjà lié à cette clé publique, ou en provisionne un nouveau (rôle Voter, dans `organization_id`) lors de la toute première preuve réussie pour cette clé — cf. docs/G1_INTEGRATION.md §4. Ne vérifie QUE la possession de la clé privée (signature sr25519 valide), jamais l'appartenance à la toile de confiance Ğ1 (vérification réseau non câblée dans ce déploiement, cf. crates/agoravote-g1/README.md).
+         * @description Seconde moitié du protocole. Retrouve l'utilisateur déjà lié à cette clé publique, ou en provisionne un nouveau (rôle Voter, dans `organization_id`) lors de la toute première preuve réussie pour cette clé — cf. docs/G1_INTEGRATION.md §4. Ne vérifie QUE la possession de la clé privée (signature ed25519 valide), jamais l'appartenance à la toile de confiance Ğ1 (vérification réseau non câblée dans ce déploiement, cf. crates/agoravote-g1/README.md).
          */
         post: {
             parameters: {
@@ -834,9 +834,9 @@ export interface components {
              * @description Organisation du nouvel utilisateur si cette clé publique n'est pas encore liée à un compte ; ignoré sinon
              */
             organization_id: string;
-            /** @description Clé publique sr25519, 32 octets encodés en hexadécimal (avec ou sans préfixe 0x) */
+            /** @description Clé publique ed25519, 32 octets encodés en hexadécimal (avec ou sans préfixe 0x) */
             public_key_hex: string;
-            /** @description Signature sr25519 de `message`, 64 octets encodés en hexadécimal */
+            /** @description Signature ed25519 de `message`, 64 octets encodés en hexadécimal */
             signature_hex: string;
             /** @description Exactement le `message` renvoyé par /auth/g1/challenge */
             message: string;

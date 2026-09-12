@@ -61,12 +61,24 @@ un principe non négociable, documenté en tête de `signature.rs`.
 ```bash
 cargo test -p agoravote-g1 --features chain-query
 # 13 tests, tous verts — défi (génération, expiration, fraîcheur sans
-# état serveur), signature (dont un vecteur sr25519 connu, //Alice)
+# état serveur), signature (dont un vecteur ed25519 connu — cf. la note
+# ci-dessous sur le correctif sr25519 -> ed25519, itération 9)
 
 cargo test -p agoravote-api
 # 17 tests, tous verts, dont 4 tests g1_* utilisant de VRAIES
-# signatures sr25519 (subxt-signer en dev-dependency), pas des mocks
+# signatures ed25519 (ed25519-zebra en dev-dependency), pas des mocks
 ```
+
+**⚠️ Correctif de schéma cryptographique (itération 9)** : jusqu'à
+l'itération 8, ce protocole vérifiait des signatures **sr25519**, sur
+la base d'une hypothèse jamais vérifiée. Des recherches web ont montré
+que les comptes/portefeuilles Ğ1v2 réels (Ğecko, Cesium²) signent
+probablement en **ed25519** (comme la Ğ1 historique), pas en sr25519
+(spécifique à l'écosystème Polkadot) — cf. `docs/DEVLOG.md` itération
+9 et `docs/SECURITY.md` §8 pour le détail complet, y compris la limite
+de confiance de cette correction elle-même (non confirmée contre une
+source primaire, `forum.duniter.org`/`git.duniter.org` restant
+bloqués depuis cet environnement).
 
 Le protocole défi/signature (§2, étapes 1 et 2) est intégralement
 câblé et testé. Seule l'étape 3 (vérification d'adhésion à la toile de
@@ -130,8 +142,9 @@ prouve pas (appartenance à la toile de confiance).
    **jamais `g1` en premier** — depuis un environnement qui a accès
    réseau à l'infrastructure Duniter (aucun de ceux utilisés jusqu'ici
    ne l'a). Bloquant pour la suite.
-3. ~~Ajouter un test de signature avec un vecteur sr25519 connu~~ —
-   fait (itération 6).
+3. ~~Ajouter un test de signature avec un vecteur cryptographique
+   connu~~ — fait (itération 6, corrigé sr25519 -> ed25519 en
+   itération 9, cf. ci-dessus).
 4. ~~Réintégrer le crate dans le workspace principal~~ — fait
    (itération 8).
 5. ~~Implémenter le sketch du §4 ci-dessus dans `agoravote-api`~~ —

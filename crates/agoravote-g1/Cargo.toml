@@ -22,35 +22,31 @@ thiserror.workspace = true
 tracing = "0.1"
 uuid.workspace = true
 
-# `subxt-signer` : uniquement la cryptographie (sr25519, encodage SS58),
-# SANS le client réseau complet — c'est la brique qui permet de vérifier
-# une signature hors ligne, testable sans connexion à un nœud. Le
-# format de clé/signature sr25519 est celui utilisé par Substrate (donc
-# par Duniter v2) et par les portefeuilles Ğ1 (Cesium², Ğecko).
+# `ed25519-zebra` (Zcash Foundation) : implémentation ed25519 pure,
+# SANS aucune dépendance réseau — c'est la brique qui permet de
+# vérifier une signature hors ligne, testable sans connexion à un
+# nœud. **PAS `subxt-signer`** (utilisé par une version antérieure de
+# ce module pour du sr25519) : cf. l'avertissement en tête de
+# `signature.rs` — les comptes/portefeuilles Ğ1v2 réels (Cesium²,
+# Ğecko) signent en ed25519, pas en sr25519 (schéma spécifique à
+# l'écosystème Polkadot, sans bénéfice pour Duniter). `subxt-signer` ne
+# propose d'ailleurs aucun module `ed25519` (vérifié en lisant son code
+# source : seulement `sr25519`/`ecdsa`/`eth`), donc ce n'est de toute
+# façon pas la bonne brique ici.
+#
+# Déjà présent dans l'arbre de dépendances résolu du workspace (tiré
+# transitivement par `smoldot`, dépendance de `subxt` pour la feature
+# `chain-query` ci-dessous) : ajouter cette dépendance directe ne
+# introduit donc aucune nouvelle contrainte de version surprise.
 #
 # `optional = true`, activé par la feature `signature-verification`
-# (voir plus bas) et non par défaut : cf. le long commentaire
-# ci-dessous sur l'état de compilation de ce crate dans cet
-# environnement. Grâce à cette feature, `cargo test -p agoravote-g1`
-# (SANS argument de feature) compile et teste réellement `challenge.rs`
-# aujourd'hui, dans CET environnement — seuls `signature.rs` et
-# `chain.rs` restent non vérifiables ici.
-#
-# `std` requis en plus de `sr25519`/`subxt` : sans elle, `schnorrkel`
-# n'a accès à aucune source d'aléa OS (crate `getrandom_or_panic`, qui
-# panique volontairement plutôt que d'utiliser un RNG non
-# cryptographique) — découvert en compilant réellement ce crate contre
-# un vecteur de test signé (`verify_signature_accepte_une_signature_valide_du_compte_de_dev_alice`
-# ci-dessous), qui a paniqué à `Keypair::sign` avant cet ajout. Ne
-# concerne que la production locale de signatures de test dans ce
-# crate : la vérification en production (`verify_signature`) ne signe
-# jamais, mais le test, lui, en a besoin pour produire un vecteur.
-subxt-signer = { version = "0.37", default-features = false, features = ["sr25519", "subxt", "std"], optional = true }
+# (voir plus bas) et non par défaut.
+ed25519-zebra = { version = "4", optional = true }
 
 # --- État de vérification de ce crate ---
 #
 # Historique (rustc 1.75, environnement de développement d'origine) :
-# ni `subxt-signer` seul (vérification de signature, ci-dessus) ni
+# ni la cryptographie de signature (alors via `subxt-signer`) ni
 # `subxt` (requêtes réseau, ci-dessous) ne compilaient alors. Deux
 # sessions de bisection de dépendances avaient identifié la chaîne de
 # blocages suivante, chacun résolu par un simple épinglage de version
@@ -63,7 +59,10 @@ subxt-signer = { version = "0.37", default-features = false, features = ["sr2551
 # cf. docs/DEVLOG.md), tous ces épinglages ont suffi à compiler et
 # tester l'intégralité du crate, `chain-query` compris — ils restent en
 # place tels quels (versions exactes déjà vérifiées fonctionnelles,
-# aucune raison de les faire bouger sans nécessité).
+# aucune raison de les faire bouger sans nécessité). Rattachés
+# directement à `chain-query` (pas à `signature-verification`, cf.
+# itération 9) depuis que `signature-verification` n'a plus besoin de
+# `subxt`/`subxt-signer` du tout — seul `chain-query` en dépend encore.
 #
 # Ce qui reste non vérifié aujourd'hui n'est PAS un problème de
 # compilation : c'est `chain.rs` (requêtes réseau vers un nœud Ğ1v2),
@@ -75,18 +74,15 @@ subxt-signer = { version = "0.37", default-features = false, features = ["sr2551
 subxt = { version = "0.37", default-features = false, features = ["jsonrpsee", "native"], optional = true }
 tokio = { version = "1", features = ["rt-multi-thread"], optional = true }
 
-# Épinglages qui ont fait progresser la résolution (cf. paragraphe
-# ci-dessus) — tous vérifiés nécessaires, aucun n'a suffi à terminer
-# la résolution à lui seul.
-# Épinglages qui ont fait progresser la résolution (cf. paragraphe
-# ci-dessus) — tous vérifiés nécessaires, aucun n'a suffi à terminer
-# la résolution à lui seul. `optional = true` + rattachés à la feature
-# `signature-verification` ci-dessous : sans quoi Cargo tenterait de
-# les résoudre même pour un `cargo build`/`cargo test` par défaut sans
-# aucune feature activée, cassant la compilation de
-# `challenge.rs`/`error.rs` qui n'en ont pourtant pas besoin — erreur
-# réellement rencontrée pendant le développement, corrigée par ces
-# `optional = true`.
+# Épinglages qui ont fait progresser la résolution de `subxt`
+# (`chain-query`, cf. paragraphe ci-dessus) — tous vérifiés
+# nécessaires, aucun n'a suffi à terminer la résolution à lui seul.
+# `optional = true` + rattachés à la feature `chain-query` ci-dessous :
+# sans quoi Cargo tenterait de les résoudre même pour un `cargo
+# build`/`cargo test` par défaut sans aucune feature activée, cassant
+# la compilation de `challenge.rs`/`error.rs` qui n'en ont pourtant pas
+# besoin — erreur réellement rencontrée pendant le développement,
+# corrigée par ces `optional = true`.
 zeroize = { version = "=1.7.0", optional = true }
 zeroize_derive = { version = "=1.4.2", optional = true }
 blake3 = { version = "=1.5.1", optional = true }
@@ -99,11 +95,18 @@ parity-scale-codec-derive = { version = "=3.6.12", optional = true }
 
 [features]
 default = []
-# Active `signature.rs` (vérification sr25519). Activer uniquement
-# dans un environnement avec une toolchain Rust à jour (voir
-# ci-dessus) : `cargo build -p agoravote-g1 --features signature-verification`.
-signature-verification = [
-    "dep:subxt-signer",
+# Active `signature.rs` (vérification ed25519, cf. son avertissement
+# en tête de fichier pour l'historique du correctif sr25519 -> ed25519).
+# Activer uniquement dans un environnement avec une toolchain Rust à
+# jour (voir ci-dessus) :
+# `cargo build -p agoravote-g1 --features signature-verification`.
+signature-verification = ["dep:ed25519-zebra"]
+# Active `chain.rs` (requêtes réseau vers un nœud Duniter v2). Activer
+# uniquement dans un environnement avec une toolchain Rust à jour (voir
+# ci-dessus) : `cargo build -p agoravote-g1 --features chain-query`.
+chain-query = [
+    "dep:subxt",
+    "dep:tokio",
     "dep:zeroize",
     "dep:zeroize_derive",
     "dep:blake3",
@@ -113,8 +116,5 @@ signature-verification = [
     "dep:toml_parser",
     "dep:parity-scale-codec",
     "dep:parity-scale-codec-derive",
+    "signature-verification",
 ]
-# Active `chain.rs` (requêtes réseau vers un nœud Duniter v2). Activer
-# uniquement dans un environnement avec une toolchain Rust à jour (voir
-# ci-dessus) : `cargo build -p agoravote-g1 --features chain-query`.
-chain-query = ["dep:subxt", "dep:tokio", "signature-verification"]

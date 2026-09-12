@@ -24,7 +24,7 @@ const DEMO_ORGANIZATION_ID = "11111111-1111-1111-1111-111111111111";
  * de la reporter ici. C'est délibérément plus lourd qu'une future
  * intégration native (`window.g1` ou équivalent, hors périmètre
  * actuel), mais chaque étape est réellement vérifiée côté serveur
- * (`agoravote_g1::verify_signature`, une vraie signature sr25519, pas
+ * (`agoravote_g1::verify_signature`, une vraie signature ed25519, pas
  * une simulation) — cf. `docs/G1_INTEGRATION.md` §4 et
  * `crates/agoravote-g1/README.md` pour le statut de ce module.
  *

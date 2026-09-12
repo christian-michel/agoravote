@@ -414,7 +414,7 @@ async fn g1_challenge() -> Json<G1ChallengeResponse> {
 /// ## Ce qui est vérifié ici, et ce qui ne l'est PAS
 ///
 /// Cette route prouve uniquement la **possession de la clé privée**
-/// correspondant à `public_key_hex` (signature sr25519 valide sur un
+/// correspondant à `public_key_hex` (signature ed25519 valide sur un
 /// défi frais). Elle ne vérifie PAS l'appartenance à la toile de
 /// confiance Ğ1 (`agoravote_g1::chain::check_membership`, feature
 /// `chain-query`) : cette vérification réseau contre un vrai nœud
@@ -1388,28 +1388,42 @@ mod tests {
 
     // --- Identité Ğ1v2 optionnelle (addendum v0.3) ---
     //
-    // Ces tests signent réellement un défi avec le compte de dev
-    // Substrate standard "//Alice" (cf. commentaire du dev-dependency
-    // `subxt-signer` dans Cargo.toml) : de vraies signatures sr25519,
-    // pas des mocks — même exigence que le reste du projet (cf.
-    // CLAUDE.md).
+    // Ces tests signent réellement un défi avec des paires de clés
+    // ed25519 de test (graines fixes et arbitraires, jamais un vrai
+    // compte Ğ1 — cf. le dev-dependency `ed25519-zebra` dans
+    // Cargo.toml et l'avertissement de correctif sr25519 -> ed25519
+    // dans `agoravote-g1/src/signature.rs`, itération 9) : de vraies
+    // signatures EdDSA, pas des mocks — même exigence que le reste du
+    // projet (cf. CLAUDE.md).
 
-    /// Récupère un défi frais auprès de l'API, le signe avec le compte
-    /// de dev "//Alice", et renvoie de quoi appeler `/auth/g1/verify`.
+    /// Paire de clés de test ed25519 dérivée d'une graine fixe.
+    fn test_signing_key(seed: u8) -> ed25519_zebra::SigningKey {
+        ed25519_zebra::SigningKey::from([seed; 32])
+    }
+
+    fn public_key_hex(signing_key: &ed25519_zebra::SigningKey) -> String {
+        let verification_key = ed25519_zebra::VerificationKey::from(signing_key);
+        super::encode_hex(&<[u8; 32]>::from(verification_key))
+    }
+
+    fn sign_hex(signing_key: &ed25519_zebra::SigningKey, message: &[u8]) -> String {
+        let signature = signing_key.sign(message);
+        super::encode_hex(&<[u8; 64]>::from(signature))
+    }
+
+    /// Récupère un défi frais auprès de l'API et le signe avec une clé
+    /// de test ed25519 fixe ("Alice", graine `0x01`), renvoie de quoi
+    /// appeler `/auth/g1/verify`.
     async fn get_challenge_and_sign(router: &Router) -> (String, String, String) {
         let (status, body) =
             post_json(router, "/auth/g1/challenge", serde_json::Value::Null, None).await;
         assert_eq!(status, StatusCode::OK);
         let message = body["message"].as_str().unwrap().to_string();
 
-        let alice = subxt_signer::sr25519::dev::alice();
-        let signature = alice.sign(message.as_bytes());
+        let alice = test_signing_key(0x01);
+        let signature_hex = sign_hex(&alice, message.as_bytes());
 
-        (
-            message,
-            super::encode_hex(&alice.public_key().0),
-            super::encode_hex(&signature.0),
-        )
+        (message, public_key_hex(&alice), signature_hex)
     }
 
     #[tokio::test]
@@ -1471,10 +1485,11 @@ mod tests {
         let (message, public_key_hex, _) = get_challenge_and_sign(&router).await;
 
         // Une signature qui ne correspond pas au message (ici : celle
-        // d'un tout autre message) doit être refusée avec un 401, pas
-        // acceptée ni provoquer d'erreur serveur.
-        let bob = subxt_signer::sr25519::dev::bob();
-        let mauvaise_signature = bob.sign(b"un autre message");
+        // d'un tout autre message, produite par une AUTRE clé de test
+        // "Bob") doit être refusée avec un 401, pas acceptée ni
+        // provoquer d'erreur serveur.
+        let bob = test_signing_key(0x02);
+        let mauvaise_signature_hex = sign_hex(&bob, b"un autre message");
 
         let (status, _) = post_json(
             &router,
@@ -1482,7 +1497,7 @@ mod tests {
             serde_json::json!({
                 "organization_id": Id::new_v4(),
                 "public_key_hex": public_key_hex,
-                "signature_hex": super::encode_hex(&mauvaise_signature.0),
+                "signature_hex": mauvaise_signature_hex,
                 "message": message,
             }),
             None,
@@ -1499,16 +1514,16 @@ mod tests {
         // `verify_freshness` doit le rejeter avant même de vérifier la
         // signature.
         let message = "message jamais emis par le serveur, sans marqueur EXP".to_string();
-        let alice = subxt_signer::sr25519::dev::alice();
-        let signature = alice.sign(message.as_bytes());
+        let alice = test_signing_key(0x01);
+        let signature_hex = sign_hex(&alice, message.as_bytes());
 
         let (status, _) = post_json(
             &router,
             "/auth/g1/verify",
             serde_json::json!({
                 "organization_id": Id::new_v4(),
-                "public_key_hex": super::encode_hex(&alice.public_key().0),
-                "signature_hex": super::encode_hex(&signature.0),
+                "public_key_hex": public_key_hex(&alice),
+                "signature_hex": signature_hex,
                 "message": message,
             }),
             None,

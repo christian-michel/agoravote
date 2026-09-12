@@ -254,9 +254,10 @@ bloqueraient probablement une mise en production :
 9. **Module d'identité Ğ1/Duniter** (`crates/agoravote-g1`) : vision
    posée dans l'addendum v0.3. Câblé de bout en bout depuis l'itération
    8 (`POST /auth/g1/challenge`/`verify`, écran `/connexion-g1`) pour
-   la preuve de possession de clé (signature sr25519 réelle, jamais la
-   phrase de 12 mots) — cf. `docs/DEVLOG.md`. La partie requête à la
-   chaîne (`chain.rs`, vérification d'appartenance à la toile de
+   la preuve de possession de clé (signature ed25519 réelle, jamais la
+   phrase de 12 mots — corrigé depuis un schéma sr25519 erroné en
+   itération 9, cf. `docs/SECURITY.md` §8) — cf. `docs/DEVLOG.md`.
+   La partie requête à la chaîne (`chain.rs`, vérification d'appartenance à la toile de
    confiance) compile mais reste **non vérifiée à l'exécution ni
    câblée à aucune route**, faute d'accès réseau à l'infrastructure
    Duniter dans tout environnement de développement utilisé jusqu'ici

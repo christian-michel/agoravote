@@ -43,13 +43,12 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }
-# Pour signer réellement un défi Ğ1 dans les tests de `routes.rs`
-# (compte de dev Substrate standard "//Alice", jamais un vrai compte
-# Ğ1 — même vecteur que `agoravote-g1/src/signature.rs`) : ces tests
-# exercent `g1_verify` de bout en bout avec une vraie signature
-# sr25519, pas un mock — cf. CLAUDE.md, "tests d'intégration réels".
-# Même version que `agoravote-g1` (déjà résolue dans le `Cargo.lock`
-# du workspace, cf. ce crate) : `default-features = false` + les mêmes
-# features minimales, pas besoin du client réseau `subxt` complet ici
-# non plus.
-subxt-signer = { version = "0.37", default-features = false, features = ["sr25519", "subxt", "std"] }
+# Pour signer réellement un défi Ğ1 dans les tests de `routes.rs` (un
+# vecteur de test ed25519 fixe et arbitraire, jamais un vrai compte
+# Ğ1 — même bibliothèque que `agoravote-g1/src/signature.rs`, cf. son
+# avertissement sur le correctif sr25519 -> ed25519, itération 9) :
+# ces tests exercent `g1_verify` de bout en bout avec une vraie
+# signature ed25519, pas un mock — cf. CLAUDE.md, "tests d'intégration
+# réels". Même version que `agoravote-g1` (déjà résolue dans le
+# `Cargo.lock` du workspace, cf. ce crate).
+ed25519-zebra = "4"

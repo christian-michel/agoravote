@@ -1,4 +1,4 @@
-//! Vérification de signature sr25519 — cœur cryptographique de la
+//! Vérification de signature ed25519 — cœur cryptographique de la
 //! preuve de possession de clé.
 //!
 //! **Principe de sécurité non négociable** : ce module ne reçoit et
@@ -9,18 +9,38 @@
 //! l'utilisateur sur ce point. La signature est produite localement,
 //! côté client, par le portefeuille de l'utilisateur.
 //!
-//! Compilé et testé (rustc 1.94, `cargo test -p agoravote-g1 --features
-//! signature-verification`) — cf. `docs/DEVLOG.md` pour l'itération qui
-//! a levé cette vérification, et `crates/agoravote-g1/README.md` pour
-//! le statut à jour de ce crate.
+//! ## ⚠️ Pourquoi ed25519, pas sr25519 (correctif, cf. `docs/DEVLOG.md`)
+//!
+//! Une version précédente de ce module vérifiait des signatures
+//! **sr25519** (schéma Schnorr, via `subxt-signer`), en présumant
+//! — sans l'avoir vérifié — que c'était le schéma par défaut de
+//! Substrate donc de Duniter v2/Ğ1v2. C'était une erreur : les
+//! discussions de la communauté Duniter (cf. le fil "Use ed25519 vs
+//! sr25519 for v2s clients" du forum officiel, et l'alignement des
+//! comptes de développement Duniter v2s sur ed25519) indiquent que
+//! les comptes/portefeuilles Ğ1v2 réels (Cesium², Ğecko) utilisent
+//! **ed25519** — le même schéma que la Ğ1 historique (v1) — précisément
+//! pour rester interopérables avec les outils tiers qui parlent
+//! nativement ed25519, sr25519 n'apportant aucun bénéfice propre à
+//! Duniter. Corrigé ici. Cette confirmation vient de recherches web
+//! (le forum et le dépôt git de Duniter restent bloqués par la liste
+//! blanche réseau de cet environnement, comme `chain.rs`) : à
+//! reconfirmer contre une source primaire (documentation officielle
+//! ou test contre un vrai portefeuille) avant une mise en production.
+//!
+//! Implémenté avec `ed25519-zebra` (Zcash Foundation), une
+//! implémentation ed25519 indépendante et auditée — pas
+//! `subxt-signer`, qui ne propose pas de module `ed25519` (seulement
+//! `sr25519` et `ecdsa`, vérifié en lisant son code source dans cet
+//! environnement).
 
-use subxt_signer::sr25519::{self, PublicKey, Signature};
+use ed25519_zebra::{Signature, VerificationKey};
 
 use crate::error::G1Error;
 
-/// Longueur en octets d'une clé publique sr25519.
+/// Longueur en octets d'une clé publique ed25519.
 pub const PUBLIC_KEY_LEN: usize = 32;
-/// Longueur en octets d'une signature sr25519.
+/// Longueur en octets d'une signature ed25519.
 pub const SIGNATURE_LEN: usize = 64;
 
 /// Vérifie qu'une signature correspond bien au message et à la clé
@@ -35,27 +55,25 @@ pub const SIGNATURE_LEN: usize = 64;
 /// Renvoie `Ok(true)`/`Ok(false)` selon que la signature est valide ou
 /// non — ce n'est PAS une erreur qu'une signature soit invalide (un
 /// participant peut se tromper de clé, ou tenter une usurpation) ;
-/// seule une entrée malformée (mauvaise longueur) renvoie `Err`.
+/// seule une entrée malformée (mauvaise longueur, ou clé publique qui
+/// n'est pas un point valide de la courbe) renvoie `Err`.
 pub fn verify_signature(
     public_key_bytes: &[u8],
     message: &[u8],
     signature_bytes: &[u8],
 ) -> Result<bool, G1Error> {
-    let public_key: [u8; PUBLIC_KEY_LEN] = public_key_bytes
+    let public_key_array: [u8; PUBLIC_KEY_LEN] = public_key_bytes
         .try_into()
         .map_err(|_| G1Error::InvalidPublicKey)?;
-    let signature: [u8; SIGNATURE_LEN] = signature_bytes
+    let signature_array: [u8; SIGNATURE_LEN] = signature_bytes
         .try_into()
         .map_err(|_| G1Error::InvalidSignature)?;
 
-    let public_key = PublicKey(public_key);
-    let signature = Signature(signature);
+    let verification_key =
+        VerificationKey::try_from(public_key_array).map_err(|_| G1Error::InvalidPublicKey)?;
+    let signature = Signature::from(signature_array);
 
-    // Confirmé par compilation contre subxt-signer 0.37.0 réel (rustc
-    // 1.94) : `verify` est une fonction libre du module `sr25519`, pas
-    // une méthode de `PublicKey` (l'inverse avait été supposé faute de
-    // pouvoir compiler dans l'environnement d'origine).
-    Ok(sr25519::verify(&signature, message, &public_key))
+    Ok(verification_key.verify(&signature, message).is_ok())
 }
 
 /// Décode une chaîne hexadécimale (avec ou sans préfixe `0x`) en
@@ -77,6 +95,7 @@ pub fn decode_hex(input: &str) -> Result<Vec<u8>, G1Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ed25519_zebra::SigningKey;
 
     #[test]
     fn decode_hex_accepte_avec_et_sans_prefixe() {
@@ -101,29 +120,44 @@ mod tests {
         assert!(matches!(result, Err(G1Error::InvalidSignature)));
     }
 
-    // Vecteur de test connu : le compte de développement Substrate
-    // standard "//Alice" (dérivation publique, documentée par
-    // `subxt_signer::sr25519::dev`, jamais utilisée pour un vrai compte
-    // Ğ1) — cf. README du crate, étape 3 ("ajouter un test avec un
-    // vecteur sr25519 connu"), maintenant possible avec une toolchain
-    // à jour.
-    #[test]
-    fn verify_signature_accepte_une_signature_valide_du_compte_de_dev_alice() {
-        let alice = subxt_signer::sr25519::dev::alice();
-        let message = b"AgoraVote - preuve de possession de compte";
-        let signature = alice.sign(message);
+    // Vecteur de test : une paire de clés ed25519 dérivée d'une graine
+    // fixe et arbitraire (PAS une dérivation SURI Substrate officielle
+    // "//Alice" — `ed25519-zebra` ne fournit pas cette convention de
+    // dérivation, contrairement à `subxt_signer::sr25519::dev`).
+    // Suffisant pour prouver que `verify_signature` vérifie une VRAIE
+    // signature EdDSA (RFC 8032), pas une simulation — cf. l'exigence
+    // du projet de toujours tester contre de la vraie cryptographie.
+    fn test_signing_key() -> SigningKey {
+        SigningKey::from([0x42u8; 32])
+    }
 
-        let result = verify_signature(&alice.public_key().0, message, &signature.0);
+    #[test]
+    fn verify_signature_accepte_une_signature_valide() {
+        let signing_key = test_signing_key();
+        let verification_key = VerificationKey::from(&signing_key);
+        let message = b"AgoraVote - preuve de possession de compte";
+        let signature = signing_key.sign(message);
+
+        let result = verify_signature(
+            verification_key.as_ref(),
+            message,
+            &<[u8; SIGNATURE_LEN]>::from(signature),
+        );
 
         assert!(matches!(result, Ok(true)));
     }
 
     #[test]
     fn verify_signature_refuse_une_signature_valide_pour_un_autre_message() {
-        let alice = subxt_signer::sr25519::dev::alice();
-        let signature = alice.sign(b"message original");
+        let signing_key = test_signing_key();
+        let verification_key = VerificationKey::from(&signing_key);
+        let signature = signing_key.sign(b"message original");
 
-        let result = verify_signature(&alice.public_key().0, b"message modifie", &signature.0);
+        let result = verify_signature(
+            verification_key.as_ref(),
+            b"message modifie",
+            &<[u8; SIGNATURE_LEN]>::from(signature),
+        );
 
         assert!(matches!(result, Ok(false)));
     }

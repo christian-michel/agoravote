@@ -952,3 +952,138 @@ chaque étape est réellement vérifiée côté serveur. Lié depuis
    copier-coller manuel du défi/signature.
 7. Bascule d'activation de l'identité Ğ1 par organisation (écran
    "Paramètres").
+
+## Itération 9 — correctif : ed25519, pas sr25519, pour l'identité Ğ1v2
+
+Objectif : le porteur de projet a demandé, après l'itération 8, de
+confirmer que le module d'identité Ğ1v2 ne confondait pas la Ğ1 (v1,
+ancienne API BMA/HTTP) et la Ğ1v2 (Duniter v2s, Substrate). Réponse en
+deux temps : l'architecture réseau ciblait bien la Ğ1v2 depuis le
+départ (jamais l'ancienne API BMA) — mais des recherches web menées à
+cette occasion ont révélé une erreur différente et plus grave, restée
+invisible jusqu'ici : le **schéma de signature cryptographique**
+utilisé (sr25519) n'est probablement pas celui des comptes/portefeuilles
+Ğ1v2 réels.
+
+### Ce qui a été découvert
+
+`crates/agoravote-g1/src/signature.rs` (itération 6/8) vérifiait des
+signatures **sr25519** via `subxt-signer`, sur la base d'une hypothèse
+jamais vérifiée ("c'est le schéma par défaut de Substrate, donc de
+Duniter v2"). Des recherches web (`forum.duniter.org` et
+`git.duniter.org` restent bloqués par la liste blanche réseau de cet
+environnement, comme pour `chain.rs` — seuls des extraits de moteur de
+recherche ont pu être consultés, pas les pages elles-mêmes) ont
+montré :
+
+- Un fil de discussion officiel du forum Duniter intitulé "Use ed25519
+  vs sr25519 for v2s clients", où la communauté argumente que sr25519
+  (spécifique à l'écosystème Polkadot) n'apporte aucun bénéfice à
+  Duniter et ferme la porte à l'interopérabilité avec les outils tiers
+  qui parlent nativement ed25519.
+- Une merge request du dépôt `duniter-v2s` alignant les comptes de
+  développement locaux sur ed25519, "pour être cohérents avec le type
+  de compte attendu".
+- Un rappel que la Ğ1 historique (v1) utilisait déjà ed25519 — la
+  continuité de schéma est un argument fort en faveur d'ed25519 pour
+  la v2 également.
+
+Conséquence pratique si l'erreur n'avait pas été corrigée : une vraie
+signature produite par un vrai portefeuille Ğ1v2 (Ğecko, Cesium²)
+aurait été **rejetée à 100 %** par `/auth/g1/verify`, alors même que
+tous les tests de l'itération 8 passaient — parce qu'ils vérifiaient
+des signatures sr25519 auto-produites par le même code, sans jamais
+confronter l'implémentation à un vecteur externe.
+
+### Correctif appliqué
+
+`signature.rs` réécrit pour vérifier des signatures **ed25519** via
+`ed25519-zebra` (Zcash Foundation, implémentation ed25519 indépendante
+et auditée) — pas `subxt-signer`, qui ne propose d'ailleurs aucun
+module `ed25519` (vérifié en lisant directement son code source dans
+cet environnement : seulement `sr25519`/`ecdsa`/`eth`). Détail notable :
+`ed25519-zebra` était déjà présent dans l'arbre de dépendances résolu
+du workspace (tiré transitivement par `smoldot`, lui-même dépendance de
+`subxt` pour `chain-query`) — l'ajouter en dépendance directe n'a donc
+introduit aucune contrainte de version surprise, contrairement aux
+épinglages laborieux qui avaient été nécessaires pour `subxt-signer`/
+`subxt` en itération 6.
+
+Restructuration de `Cargo.toml` : les épinglages de version hérités de
+la bisection de dépendances de l'itération 6 (`zeroize`, `blake3`,
+`curve25519-dalek`, `constant_time_eq`, `indexmap`, `toml_parser`,
+`parity-scale-codec`, `parity-scale-codec-derive`) étaient nécessaires
+à la fois pour `subxt-signer` (sr25519, désormais supprimé) et pour
+`subxt` (`chain-query`) — ils sont maintenant rattachés uniquement à
+`chain-query`, puisque `signature-verification` n'a plus besoin que
+d'`ed25519-zebra`, une dépendance nettement plus légère. Revérifié :
+`cargo build -p agoravote-g1 --features signature-verification` (léger,
+rapide) ET `cargo build -p agoravote-g1 --features chain-query`
+(inchangé, toujours vert) compilent tous les deux indépendamment.
+
+Vecteurs de test : remplacés par des paires de clés ed25519 dérivées
+de graines fixes et arbitraires (`ed25519-zebra` ne propose pas de
+convention "compte de dev `//Alice`" comme `subxt_signer::sr25519::dev`)
+— documentés comme tels dans le code, honnêtes sur le fait que ce ne
+sont pas des comptes de développement Substrate officiels, juste de
+vraies paires de clés EdDSA (RFC 8032) suffisantes pour prouver que
+`verify_signature` vérifie une vraie signature, pas une simulation.
+
+Propagé partout où le schéma était mentionné : `agoravote-core::auth`
+(doc de `G1Link`), `agoravote-api` (dev-dependency de test, doc de
+`g1_verify`, tests `routes.rs` réécrits avec de vraies signatures
+ed25519), `docs/openapi.yaml` (+ régénération des types frontend),
+`frontend/src/pages/G1Login.tsx`, `crates/agoravote-g1/README.md`,
+`lib.rs`.
+
+### Ce qui a été vérifié concrètement
+
+- `cargo test -p agoravote-g1 --features signature-verification` : 13
+  tests verts (dont 2 avec de vraies signatures/vérifications ed25519).
+- `cargo build -p agoravote-g1 --features chain-query` : toujours vert
+  après la restructuration des épinglages de `Cargo.toml`.
+- `make check` (workspace complet) vert, y compris les 4 tests
+  `routes.rs::g1_*` réécrits avec de vraies signatures ed25519.
+- Tests d'intégration PostgreSQL réels relancés : 10/10 verts
+  (inchangés par ce correctif, `G1Link` ne dépend pas du schéma de
+  signature).
+- `npx tsc -b`, `npx oxlint`, `npm run build` verts contre le schéma
+  OpenAPI régénéré.
+- Parcours complet rejoué dans un vrai Chromium avec une vraie
+  signature **ed25519** cette fois (et non plus sr25519) : défi →
+  signature → vérification → redirection vers `/admin` avec une
+  session valide.
+
+### Ce qui reste non vérifié (honnêteté du statut)
+
+Cette correction s'appuie sur des recherches web (extraits de moteur
+de recherche), pas sur une lecture directe de la documentation
+officielle Duniter ou un test contre un vrai portefeuille Ğ1v2 (Ğecko,
+Cesium²) — `forum.duniter.org` et `git.duniter.org` restent bloqués
+par la liste blanche réseau de cet environnement. **À reconfirmer
+avant toute mise en production**, idéalement en signant un défi réel
+avec un vrai portefeuille Ğ1v2 et en vérifiant que
+`POST /auth/g1/verify` l'accepte. Cf. `docs/SECURITY.md` §8.
+
+### Prochaines itérations candidates (mise à jour)
+
+1. **Reconfirmer le schéma ed25519 contre une source primaire**
+   (documentation officielle Duniter, ou test contre un vrai
+   portefeuille Ğ1v2) — priorité avant toute mise en production de ce
+   module, cf. ci-dessus.
+2. Confirmer les noms de stockage de `chain.rs` (`agoravote-g1`) contre
+   un nœud `gdev` réel, depuis un environnement qui a accès à
+   l'infrastructure Duniter — puis câbler `chain-query` à
+   `/auth/g1/verify` (vérification optionnelle de toile de confiance
+   par campagne).
+3. `GET /campaigns` (liste) côté API, pour remplacer le palliatif de
+   mémorisation locale (tableau de bord ET écran Campagnes).
+4. Câbler `agoravote-stats` à une route API (statistiques descriptives
+   par question) pour enrichir l'écran Analyse sans donnée fictive.
+5. Permissions fines, flux d'invitation d'organisateurs, journal
+   d'audit (cf. itération 3).
+6. Migration `sqlx` 0.6 → 0.7/0.8 (cf. itération 6).
+7. Intégration d'une extension de portefeuille Ğ1 pour éviter le
+   copier-coller manuel du défi/signature.
+8. Bascule d'activation de l'identité Ğ1 par organisation (écran
+   "Paramètres").

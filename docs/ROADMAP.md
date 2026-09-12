@@ -18,15 +18,20 @@ coché — l'historique de ce qui a été priorisé et quand a de la valeur.
       page, `GET /auth/me` ajouté pour le corriger) et un conflit de
       peer-dependency npm (`typescript` ramené à `^5.9.3`).
 - [x] **Compiler `agoravote-g1`** avec une toolchain à jour, ajouter un
-      test avec un vecteur sr25519 connu. Fait — cf. `docs/DEVLOG.md`
-      itération 6 (rustc 1.94, 9 tests verts dont le vecteur `//Alice`).
+      test avec un vecteur cryptographique connu. Fait — cf.
+      `docs/DEVLOG.md` itération 6 (rustc 1.94, 9 tests verts). Vecteur
+      corrigé sr25519 -> **ed25519** en itération 9 (cf. ci-dessous et
+      `docs/SECURITY.md` §8) : le schéma d'origine était une hypothèse
+      non vérifiée, probablement fausse pour les comptes Ğ1v2 réels.
 - [ ] **Confirmer les noms de stockage de `agoravote-g1` (`chain.rs`)
-      contre un nœud `gdev` réel**, puis réintégrer le crate au
-      workspace principal. Toujours bloqué : l'accès réseau à
+      contre un nœud `gdev` réel.** Toujours bloqué : l'accès réseau à
       l'infrastructure Duniter/Ğ1 reste refusé par la politique réseau
       de tous les environnements de développement utilisés jusqu'ici
-      (testé et confirmé à nouveau en itération 6, pas juste supposé
-      inchangé) — nécessite un environnement qui a cet accès.
+      (testé et confirmé à nouveau en itération 8, pas juste supposé
+      inchangé) — nécessite un environnement qui a cet accès. Bloquant
+      aussi pour reconfirmer le schéma de signature ed25519 (itération
+      9) contre une source primaire, faute d'accès à
+      `forum.duniter.org`/`git.duniter.org` depuis ici.
 
 ## Backend
 
@@ -113,8 +118,16 @@ Cf. `docs/G1_INTEGRATION.md` pour le détail complet de chaque étape.
       l'appartenance à la toile de confiance (cf. item précédent).
 - [x] Documenter dans `docs/SECURITY.md` les implications d'un nœud
       RPC potentiellement malveillant. Fait — cf. `docs/SECURITY.md`
-      §7 et `docs/DEVLOG.md` itération 8 (documenté par anticipation :
+      §8 et `docs/DEVLOG.md` itération 8 (documenté par anticipation :
       `chain-query` n'est pas encore câblé, cf. item ci-dessus).
+- [ ] **Reconfirmer le schéma de signature ed25519 contre une source
+      primaire** (documentation officielle Duniter, ou test contre un
+      vrai portefeuille Ğecko/Cesium²). Corrigé en itération 9 depuis
+      un mauvais schéma initial (sr25519, jamais vérifié) sur la seule
+      base de recherches web — `forum.duniter.org`/`git.duniter.org`
+      restent bloqués par la liste blanche réseau de tout environnement
+      utilisé jusqu'ici. Bloquant avant toute mise en production de ce
+      module — cf. `docs/DEVLOG.md` itération 9, `docs/SECURITY.md` §8.
 - [ ] Intégration d'une extension de portefeuille Ğ1 (Cesium²,
       Ğecko...) pour éviter le copier-coller manuel du défi/signature
       de l'écran `/connexion-g1` actuel — cf. `docs/DEVLOG.md`

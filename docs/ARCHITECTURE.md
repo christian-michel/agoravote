@@ -162,14 +162,17 @@ plutôt qu'un repli silencieux.
 `agoravote-api` d'en dépendre par chemin (Cargo refuse qu'un membre de
 workspace dépende d'un crate qui déclare son propre workspace séparé).
 Module optionnel de preuve de possession de compte Ğ1v2 (signature
-sr25519) et de vérification d'adhésion à la toile de confiance (requête
+ed25519) et de vérification d'adhésion à la toile de confiance (requête
 à la chaîne Duniter v2) — cf. `crates/agoravote-g1/README.md` et
-`docs/G1_INTEGRATION.md` pour le détail complet.
+`docs/G1_INTEGRATION.md` pour le détail complet. **Corrigé sr25519 ->
+ed25519 en itération 9** (cf. `docs/DEVLOG.md`, `docs/SECURITY.md`
+§8) : le schéma d'origine (itération 8) était une hypothèse jamais
+vérifiée, probablement fausse pour les comptes Ğ1v2 réels.
 
 | Fichier | Statut |
 |---|---|
 | `challenge.rs` | Compilé et testé (7 tests verts) — génération de défi et `verify_freshness` (fraîcheur vérifiable sans état serveur, horodatage embarqué dans le texte signé), pur, sans dépendance réseau |
-| `signature.rs` | Compilé et testé (6 tests verts, dont un vecteur sr25519 connu `//Alice`) — feature `signature-verification`, activée par `agoravote-api` (cf. son `Cargo.toml`) |
+| `signature.rs` | Compilé et testé (6 tests verts, dont un vecteur ed25519 connu) — feature `signature-verification`, activée par `agoravote-api` (cf. son `Cargo.toml`), via `ed25519-zebra` (pas `subxt-signer`, qui ne propose pas de module ed25519) |
 | `chain.rs` | Compilé (feature `chain-query`) mais non vérifié à l'exécution — réseau Duniter/Ğ1 toujours bloqué dans cet environnement, noms de stockage non confirmés. **Non activée par `agoravote-api`** : `/auth/g1/verify` ne prouve donc que la possession de clé, jamais l'appartenance à la toile de confiance — cf. `docs/SECURITY.md` §8. |
 
 **Câblage HTTP** (itération 8) : `POST /auth/g1/challenge` et
