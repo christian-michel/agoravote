@@ -140,7 +140,7 @@ export default function AdminHome() {
           ) : (
             <ul className="mt-4 flex flex-col gap-2">
               {recent.slice(0, 5).map((c) => {
-                const full = campaigns?.find((full) => full.id === c.id);
+                const full = campaigns?.find((campaign) => campaign.id === c.id);
                 return (
                   <li key={c.id}>
                     <Link

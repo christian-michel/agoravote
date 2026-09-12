@@ -54,6 +54,10 @@ export function AdminLayout({ children }: { children: ReactNode }) {
 
       <nav className="flex flex-1 flex-col gap-1 px-3 py-4">
         {NAV_ITEMS.map((item) => {
+          // "/admin" exige une égalité stricte (sinon il resterait actif
+          // sur "/admin/campagnes", qui commence aussi par "/admin") ;
+          // les autres entrées restent actives sur leurs sous-routes
+          // (ex. "/admin/campagnes/:id/analyse" garde "Campagnes" actif).
           const active =
             item.href != null &&
             location.pathname.startsWith(item.href) &&

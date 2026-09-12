@@ -30,6 +30,13 @@ export interface BarListItem {
  * par un libellé en gras, jamais par une teinte différente (cf. règle
  * "le texte ne porte jamais la couleur de la donnée"). */
 export function BarList({ items, unit = "%" }: { items: BarListItem[]; unit?: string }) {
+  // Longueur normalisée sur le plus grand item affiché, pas sur une
+  // échelle 0-100 fixe : l'option en tête occupe toujours la largeur
+  // disponible, ce qui rend le classement lisible d'un coup d'œil même
+  // quand aucune option n'approche 100% (cas fréquent en vote par
+  // approbation, où les pourcentages ne se somment pas à 100). La
+  // valeur exacte reste toujours affichée en toutes lettres à côté de
+  // chaque barre — jamais seulement suggérée par sa longueur.
   const max = Math.max(1, ...items.map((i) => i.value));
   return (
     <ul className="flex flex-col gap-3">
@@ -69,7 +76,11 @@ export function Donut({ slices }: { slices: DonutSlice[] }) {
   const total = slices.reduce((sum, s) => sum + s.value, 0) || 1;
   const radius = 15.5;
   const circumference = 2 * Math.PI * radius;
-  const gap = 2; // espace de séparation en unités de circonférence (degrés-équivalent)
+  // Espace de séparation entre tranches adjacentes, en unités de
+  // longueur d'arc (mêmes unités que `circumference`, pas des degrés)
+  // — cf. skill dataviz : un espace en couleur de fond, jamais un
+  // contour, pour distinguer deux segments qui se touchent.
+  const gap = 2;
   let offset = 0;
 
   return (

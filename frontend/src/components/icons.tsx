@@ -79,48 +79,10 @@ export function PlusIcon(props: IconProps) {
   );
 }
 
-export function SearchIcon(props: IconProps) {
-  return (
-    <svg {...base(props)}>
-      <circle cx="11" cy="11" r="7" />
-      <path d="m21 21-4.3-4.3" />
-    </svg>
-  );
-}
-
-export function ChevronRightIcon(props: IconProps) {
-  return (
-    <svg {...base(props)}>
-      <path d="m9 6 6 6-6 6" />
-    </svg>
-  );
-}
-
-export function CheckIcon(props: IconProps) {
-  return (
-    <svg {...base(props)}>
-      <path d="M20 6 9 17l-5-5" />
-    </svg>
-  );
-}
-
 export function TrashIcon(props: IconProps) {
   return (
     <svg {...base(props)}>
       <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6" />
-    </svg>
-  );
-}
-
-export function GripIcon(props: IconProps) {
-  return (
-    <svg {...base(props)}>
-      <circle cx="9" cy="6" r="1.2" fill="currentColor" stroke="none" />
-      <circle cx="9" cy="12" r="1.2" fill="currentColor" stroke="none" />
-      <circle cx="9" cy="18" r="1.2" fill="currentColor" stroke="none" />
-      <circle cx="15" cy="6" r="1.2" fill="currentColor" stroke="none" />
-      <circle cx="15" cy="12" r="1.2" fill="currentColor" stroke="none" />
-      <circle cx="15" cy="18" r="1.2" fill="currentColor" stroke="none" />
     </svg>
   );
 }
