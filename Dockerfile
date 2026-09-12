@@ -34,7 +34,9 @@ COPY Cargo.toml Cargo.lock ./
 COPY crates/agoravote-core/Cargo.toml crates/agoravote-core/Cargo.toml
 COPY crates/agoravote-voting/Cargo.toml crates/agoravote-voting/Cargo.toml
 COPY crates/agoravote-stats/Cargo.toml crates/agoravote-stats/Cargo.toml
+COPY crates/agoravote-auth/Cargo.toml crates/agoravote-auth/Cargo.toml
 COPY crates/agoravote-store/Cargo.toml crates/agoravote-store/Cargo.toml
+COPY crates/agoravote-g1/Cargo.toml crates/agoravote-g1/Cargo.toml
 COPY crates/agoravote-api/Cargo.toml crates/agoravote-api/Cargo.toml
 
 # Crée des fichiers source vides le temps de précompiler les
@@ -45,14 +47,28 @@ COPY crates/agoravote-api/Cargo.toml crates/agoravote-api/Cargo.toml
 # cf. commentaire dans `postgres.rs` — aucune base de données requise
 # pendant `cargo build`), donc ce dossier doit exister dès cette étape,
 # même vide, pour que la précompilation des dépendances réussisse.
+# TOUS les membres du workspace racine (`Cargo.toml`, `members = [...]`)
+# doivent avoir un manifeste présent ici, y compris ceux qu'`agoravote-api`
+# ne dépend pas directement — Cargo charge le graphe COMPLET du
+# workspace avant de résoudre quoi que ce soit, pas seulement les
+# dépendances du crate ciblé par `-p` : `agoravote-auth` (dépendance de
+# `agoravote-store`) et `agoravote-g1` (dépendance directe d'`agoravote-api`
+# depuis l'itération 8, cf. docs/DEVLOG.md) manquaient ici et faisaient
+# échouer `cargo build` avec "failed to read .../Cargo.toml" avant cet
+# ajout — bug resté invisible tant que personne n'avait testé une vraie
+# construction Docker (jamais disponible dans les environnements de
+# développement utilisés jusqu'ici, cf. CLAUDE.md).
 RUN mkdir -p crates/agoravote-core/src crates/agoravote-voting/src \
-             crates/agoravote-stats/src crates/agoravote-store/src \
-             crates/agoravote-store/migrations crates/agoravote-api/src \
+             crates/agoravote-stats/src crates/agoravote-auth/src \
+             crates/agoravote-store/src crates/agoravote-store/migrations \
+             crates/agoravote-g1/src crates/agoravote-api/src \
     && echo "fn main() {}" > crates/agoravote-api/src/main.rs \
     && echo "" > crates/agoravote-core/src/lib.rs \
     && echo "" > crates/agoravote-voting/src/lib.rs \
     && echo "" > crates/agoravote-stats/src/lib.rs \
+    && echo "" > crates/agoravote-auth/src/lib.rs \
     && echo "" > crates/agoravote-store/src/lib.rs \
+    && echo "" > crates/agoravote-g1/src/lib.rs \
     && cargo build --release -p agoravote-api \
     && rm -rf crates/*/src
 
@@ -63,7 +79,9 @@ COPY crates crates
 RUN touch crates/agoravote-core/src/lib.rs \
           crates/agoravote-voting/src/lib.rs \
           crates/agoravote-stats/src/lib.rs \
+          crates/agoravote-auth/src/lib.rs \
           crates/agoravote-store/src/lib.rs \
+          crates/agoravote-g1/src/lib.rs \
           crates/agoravote-api/src/main.rs \
     && cargo build --release -p agoravote-api
 

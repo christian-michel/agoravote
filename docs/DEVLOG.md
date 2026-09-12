@@ -1087,3 +1087,70 @@ avec un vrai portefeuille Ğ1v2 et en vérifiant que
    copier-coller manuel du défi/signature.
 8. Bascule d'activation de l'identité Ğ1 par organisation (écran
    "Paramètres").
+
+## Itération 10 — correctif : `Dockerfile` ne copiait pas tous les manifestes du workspace
+
+Objectif : le porteur de projet a lancé `./install.sh` sur sa propre
+machine (ZorinOS, Docker Desktop) — la toute première fois que ce
+projet était réellement construit avec Docker, cet outil n'ayant jamais
+été disponible dans aucun environnement de développement utilisé
+jusqu'ici (cf. CLAUDE.md). La construction a échoué :
+
+```
+error: failed to load manifest for workspace member `/build/crates/agoravote-store`
+Caused by: failed to load manifest for dependency `agoravote-auth`
+Caused by: failed to read `/build/crates/agoravote-auth/Cargo.toml`
+Caused by: No such file or directory (os error 2)
+```
+
+### Cause
+
+`Dockerfile` copie d'abord uniquement les manifestes (`Cargo.toml`) de
+chaque crate pour profiter du cache de layers Docker (astuce standard),
+avant de créer des fichiers source vides et de lancer `cargo build -p
+agoravote-api` une première fois pour ne précompiler que les
+dépendances tierces. Mais Cargo, pour résoudre un workspace, charge le
+manifeste de **tous** les membres déclarés dans `[workspace]
+members` du `Cargo.toml` racine — pas seulement ceux dont dépend le
+crate ciblé par `-p`. Le `Dockerfile` ne copiait que les manifestes de
+`agoravote-core`, `agoravote-voting`, `agoravote-stats`,
+`agoravote-store` et `agoravote-api` : `agoravote-auth` (dépendance de
+`agoravote-store`, présente depuis l'introduction de
+l'authentification, cf. itération 3) et `agoravote-g1` (dépendance
+directe d'`agoravote-api` depuis l'itération 8) manquaient tous les
+deux — un oubli resté invisible faute d'avoir jamais pu tester une
+vraie construction Docker avant aujourd'hui.
+
+### Correctif
+
+Ajout des `COPY crates/agoravote-auth/Cargo.toml ...` et `COPY
+crates/agoravote-g1/Cargo.toml ...`, plus les répertoires/fichiers
+source factices correspondants (`mkdir`/`echo ""`) et leur `touch`
+dans l'étape de reconstruction finale — même patron que les crates déjà
+présents.
+
+### Ce qui a été vérifié concrètement
+
+Le vrai `docker build` n'a pas pu être rejoué dans cet environnement :
+son démon Docker, bien que techniquement démarrable ici, ne peut pas
+tirer les images de base (`rust:1-slim-bookworm`, etc.) depuis Docker
+Hub — bloqué par la liste blanche réseau de cet environnement (même
+famille de contrainte que l'accès à l'infrastructure Duniter pour
+`chain.rs`). À la place, la logique EXACTE du `Dockerfile` a été rejouée
+directement avec `cargo` dans une copie isolée du dépôt (mêmes
+commandes `mkdir`/`echo`/`cargo build --release -p agoravote-api`,
+recompilées deux fois — une fois avec les sources factices, une fois
+avec les vraies, comme le fait le `Dockerfile`) : les deux étapes
+réussissent et produisent un vrai binaire `agoravote-api` exécutable.
+C'est une vérification forte de la logique Cargo/workspace en jeu,
+mais **pas un test du `Dockerfile` lui-même** (syntaxe Docker, layers,
+étape frontend) — à confirmer par le porteur de projet en relançant
+`./install.sh`.
+
+### Prochaines itérations candidates (mise à jour)
+
+1. Confirmer que `./install.sh` aboutit maintenant sur une machine avec
+   un vrai accès Docker Hub (cf. ci-dessus, non testable depuis cet
+   environnement).
+2. Reste de la liste de l'itération 9 (reconfirmer le schéma ed25519,
+   `chain-query`, `GET /campaigns`, etc.) — inchangée, non reprise ici.
