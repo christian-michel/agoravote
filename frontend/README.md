@@ -34,30 +34,32 @@ compilera contre un contrat obsolète sans avertissement.
 |---|---|---|
 | Accueil | `/` | Fait |
 | Connexion / Inscription | `/connexion`, `/inscription` | Fait |
-| Tableau de bord admin | `/admin` | Fait — création de campagne ; la liste "campagnes récentes" est mémorisée dans le navigateur (cf. `src/lib/recentCampaigns.ts`), pas une vraie liste serveur (l'API n'expose pas encore cette route) |
-| Gestion de campagne | `/admin/campagnes/:id` | Fait — construction du formulaire (choix unique/multiple uniquement), publication, clôture, dépouillement |
+| Tableau de bord admin | `/admin` | Fait — cartes statistiques réelles (dérivées des campagnes mémorisées, cf. `src/lib/recentCampaigns.ts`), création de campagne |
+| Campagnes | `/admin/campagnes` | Fait (itération 7) — reprend la même limite que le tableau de bord : liste propre à ce navigateur, pas une vraie liste serveur |
+| Modules | `/admin/modules` | Fait (itération 7) — `GET /modules`, déjà réel, jamais montré comme écran à part entière auparavant |
+| Gestion de campagne | `/admin/campagnes/:id` | Fait — bibliothèque de questions (les six types acceptés par l'API depuis l'itération 7), sélecteur de méthode en cartes, publication, clôture, dépouillement |
+| Analyse et visualisation | `/admin/campagnes/:id/analyse` | Fait (itération 7), scope volontairement réduit — comparaison des résultats déjà calculés entre questions ; pas de démographie ni de série temporelle (données inexistantes, cf. `docs/ROADMAP.md`) |
 | Vote citoyen | `/campagnes/:id/questions/:qid/voter` | Fait |
-| Résultats publics | `/campagnes/:id/questions/:qid/resultats` | Fait |
+| Résultats publics | `/campagnes/:id/questions/:qid/resultats` | Fait — jauge de participation, donut, barres, méthodologie dépliable |
 
 ## Ce qui n'est PAS fait
 
-- **Vérification visuelle** : faite (cf. `docs/DEVLOG.md`, itération
-  6) — parcours complet (inscription, création de campagne,
-  formulaire, publication, vote, dépouillement, résultats publics)
-  conduit dans un vrai Chromium, desktop et mobile, zéro erreur
-  console. A révélé et corrigé un bug réel (`user` restait `null`
-  après un rechargement de page malgré un jeton valide, cf. `GET
-  /auth/me`) — cf. DEVLOG pour le détail. `npm install` a aussi
-  révélé un conflit de peer-dependency (`typescript` épinglé sur une
-  branche `6.x` incompatible avec `openapi-typescript`, jamais détecté
-  faute d'avoir pu lancer un `npm install` réel avant) — corrigé
-  (`typescript` ramené sur `^5.9.3`).
-- Types de question au-delà de choix unique/multiple (texte, nombre,
-  échelle, classement) dans le constructeur de formulaire — l'API les
-  supporte déjà (cf. `docs/openapi.yaml`), pas encore l'UI.
-- Liste des campagnes côté serveur (cf. tableau ci-dessus).
+- **Vérification visuelle** : faite à deux reprises, cf. `docs/DEVLOG.md`
+  — itération 6 (premier passage, a révélé et corrigé le bug `/auth/me`
+  et un conflit de peer-dependency `typescript`) et itération 7 (refonte
+  sur les planches UX fournies par le porteur de projet, a révélé et
+  corrigé deux bugs de responsive mobile : nav du haut chevauchée sous
+  400px pour un utilisateur connecté, et nav latérale à largeur fixe
+  rendant tout le contenu admin inutilisable sous 1024px).
+- Liste des campagnes/modules côté serveur (cf. tableau ci-dessus —
+  `GET /campaigns` n'existe toujours pas côté API).
 - Écran de permissions fines / journal d'audit (dépend des mêmes
-  limites déjà documentées côté backend, cf. `README.md` racine).
+  limites déjà documentées côté backend, cf. `README.md` racine) —
+  affiché grisé avec un badge "Bientôt" dans la nav latérale plutôt
+  qu'omis, sans jamais être cliquable.
+- Démographie et séries temporelles dans l'écran Analyse (cf.
+  `docs/ROADMAP.md` — nécessite une décision produit sur la collecte
+  de ces données, pas seulement un ajout technique).
 - Internationalisation de l'interface elle-même (le contenu des
   campagnes est déjà multilingue côté modèle — `prompt`/`labels` sont
   des dictionnaires par langue — mais l'interface n'affiche que `fr`
