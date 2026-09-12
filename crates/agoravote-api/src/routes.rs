@@ -15,6 +15,7 @@
 //! | `POST /auth/register`                                | (nouveau, §13)                    |
 //! | `POST /auth/login`                                   | (nouveau, §13)                    |
 //! | `POST /auth/logout`                                  | (nouveau, §13)                    |
+//! | `GET  /auth/me`                                       | en-tête (rechargement de page)    |
 //! | `POST /campaigns`                                    | 01 Tableau de bord / 02 Campagnes |
 //! | `POST /campaigns/:id/form`                            | 03 Éditeur de formulaire          |
 //! | `POST /campaigns/:id/publish`                          | 02 Campagnes                      |
@@ -82,6 +83,7 @@ pub fn build_router(state: AppState) -> Router {
         .route("/auth/register", post(register))
         .route("/auth/login", post(login))
         .route("/auth/logout", post(logout))
+        .route("/auth/me", get(me))
         .route("/campaigns", post(create_campaign))
         .route("/campaigns/:campaign_id", get(get_campaign))
         .route(
@@ -344,6 +346,23 @@ fn unauthorized_login() -> (StatusCode, Json<ErrorResponse>) {
         StatusCode::UNAUTHORIZED,
         Json(ErrorResponse::new("email ou mot de passe incorrect")),
     )
+}
+
+/// `GET /auth/me` — renvoie l'utilisateur associé au jeton présenté.
+///
+/// Comble un manque découvert en vérifiant le frontend dans un vrai
+/// navigateur (cf. docs/DEVLOG.md, itération 6) : sans cette route,
+/// `AuthContext` ne pouvait retrouver `user` qu'à l'instant précis
+/// d'un `login`/`register` — un simple rechargement de page (jeton
+/// toujours valide en `localStorage`) laissait `user` à `null` alors
+/// que `status` restait "authenticated", d'où un en-tête qui
+/// n'affichait plus ni les liens connectés ni les liens de connexion,
+/// et un tableau de bord dont "Créer la campagne" échouait
+/// silencieusement (`if (!user) return;`). `AuthUser` a déjà validé le
+/// jeton ; cette route ne fait que renvoyer l'utilisateur qu'il
+/// désigne, sans lecture supplémentaire en base.
+async fn me(AuthUser(user): AuthUser) -> Json<agoravote_core::User> {
+    Json(user)
 }
 
 /// `POST /auth/logout` — supprime la session correspondant au jeton
@@ -1152,5 +1171,59 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn get_me_renvoie_lutilisateur_du_jeton() {
+        let router = test_router();
+        let organization_id = Id::new_v4();
+        let (_, body) = post_json(
+            &router,
+            "/auth/register",
+            serde_json::json!({
+                "organization_id": organization_id,
+                "email": "auth-me@example.test",
+                "password": "un-mot-de-passe-suffisamment-long",
+                "display_name": "Vérifiée après rechargement",
+            }),
+            None,
+        )
+        .await;
+        let token = body["token"].as_str().unwrap().to_string();
+
+        let response = router
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/auth/me")
+                    .header("authorization", format!("Bearer {token}"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let user: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(user["display_name"], "Vérifiée après rechargement");
+    }
+
+    #[tokio::test]
+    async fn get_me_sans_jeton_renvoie_401() {
+        let router = test_router();
+        let response = router
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/auth/me")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     }
 }

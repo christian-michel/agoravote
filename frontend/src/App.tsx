@@ -16,6 +16,7 @@ import Results from "./pages/Results";
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { status } = useAuth();
   if (status === "anonymous") return <Navigate to="/connexion" replace />;
+  if (status === "checking") return null;
   return <>{children}</>;
 }
 

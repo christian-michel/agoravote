@@ -112,6 +112,8 @@ export const api = {
 
   logout: () => request<void>("/auth/logout", { method: "POST" }),
 
+  me: () => request<User>("/auth/me"),
+
   createCampaign: (body: { organization_id: string; title: string }) =>
     request<Campaign>("/campaigns", { method: "POST", body }),
 

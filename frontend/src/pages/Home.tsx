@@ -30,11 +30,11 @@ export default function Home() {
               <Link to="/admin">
                 <Button>Aller au tableau de bord</Button>
               </Link>
-            ) : (
+            ) : status === "anonymous" ? (
               <Link to="/inscription">
                 <Button>Créer un compte organisateur</Button>
               </Link>
-            )}
+            ) : null}
           </div>
         </Card>
 

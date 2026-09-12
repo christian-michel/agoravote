@@ -14,15 +14,20 @@
  * pour la même discipline : documenter les compromis plutôt que les
  * cacher).
  */
-import { createContext, useContext, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { api, ApiError, getStoredToken, setStoredToken, type User } from "../api/client";
 
 interface AuthState {
   user: User | null;
-  /** `undefined` tant qu'on n'a pas fini de vérifier un jeton déjà
-   * stocké au chargement de la page — permet à l'UI d'afficher un état
-   * de chargement plutôt que de flasher "non connecté" puis "connecté". */
-  status: "authenticated" | "anonymous";
+  /** `"checking"` tant qu'un jeton stocké n'a pas encore été confirmé
+   * contre `GET /auth/me` (juste après un rechargement de page) —
+   * permet à l'UI d'afficher un état de chargement plutôt que de
+   * flasher "non connecté" puis "connecté", et surtout d'éviter que
+   * `status === "authenticated"` coexiste avec `user === null` (bug
+   * découvert en vérifiant le frontend dans un vrai navigateur, cf.
+   * docs/DEVLOG.md itération 6 : l'en-tête n'affichait alors plus
+   * aucun lien, et "Créer la campagne" échouait silencieusement). */
+  status: "checking" | "authenticated" | "anonymous";
   login: (email: string, password: string) => Promise<void>;
   register: (input: { organizationId: string; email: string; password: string; displayName: string }) => Promise<void>;
   logout: () => Promise<void>;
@@ -32,19 +37,40 @@ const AuthContext = createContext<AuthState | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  // L'API n'expose pas de route "qui suis-je" à partir d'un jeton seul
-  // (cf. docs/openapi.yaml) : on ne peut donc pas revalider un jeton
-  // stocké au rechargement de la page sans connaître déjà
-  // l'utilisateur associé. On se contente ici de savoir qu'un jeton
-  // existe ; la première requête protégée qui échouerait en 401 (cf.
-  // api/client.ts, ApiError) doit alors déclencher une déconnexion
-  // propre côté appelant. Calculé en initialiseur paresseux plutôt
-  // qu'un effet : c'est une dérivation synchrone d'un état déjà
-  // disponible au premier rendu, pas une synchronisation avec un
-  // système externe — cf. la règle react/set-state-in-effect.
+  // Calculé en initialiseur paresseux plutôt qu'un effet : c'est une
+  // dérivation synchrone d'un état déjà disponible au premier rendu,
+  // pas une synchronisation avec un système externe — cf. la règle
+  // react/set-state-in-effect. L'effet ci-dessous ne fait que la
+  // confirmation réseau qui doit forcément suivre.
   const [status, setStatus] = useState<AuthState["status"]>(() =>
-    getStoredToken() ? "authenticated" : "anonymous",
+    getStoredToken() ? "checking" : "anonymous",
   );
+
+  // Un jeton en `localStorage` ne suffit pas à connaître
+  // l'utilisateur qu'il désigne (il a pu être émis lors d'une session
+  // précédente, avant ce rechargement) : `GET /auth/me` le confirme
+  // (et remplit `user`), ou révèle qu'il est expiré/invalide, auquel
+  // cas on efface la session locale plutôt que de rester bloqué en
+  // "authenticated" sans utilisateur.
+  useEffect(() => {
+    if (status !== "checking") return;
+    let cancelled = false;
+    api
+      .me()
+      .then((fetchedUser) => {
+        if (cancelled) return;
+        setUser(fetchedUser);
+        setStatus("authenticated");
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setStoredToken(null);
+        setStatus("anonymous");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [status]);
 
   const login: AuthState["login"] = async (email, password) => {
     const result = await api.login({ email, password });

@@ -130,6 +130,29 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /auth/me:
+    get:
+      tags: [auth]
+      summary: Renvoie l'utilisateur associé au jeton présenté
+      description: >
+        Permet au frontend de retrouver l'utilisateur courant après un
+        rechargement de page (le jeton survit en `localStorage`, mais
+        l'utilisateur qu'il désigne ne peut être connu sans cette
+        route) — cf. docs/DEVLOG.md, itération 6.
+      responses:
+        "200":
+          description: Utilisateur authentifié par le jeton présenté
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          description: Jeton absent ou invalide
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /campaigns:
     post:
       tags: [campaigns]
