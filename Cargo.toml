@@ -32,10 +32,6 @@ authors = ["AgoraVote contributors"]
 [workspace.dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-# Version épinglée : les versions plus récentes d'uuid tirent une
-# version de `getrandom` qui exige l'édition Cargo 2024, indisponible
-# avec la toolchain rustc 1.75 fournie par apt sur cette machine de
-# développement. À réévaluer quand la toolchain sera mise à jour.
-uuid = { version = "=1.10.0", features = ["v4", "serde"] }
+uuid = { version = "1", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
 thiserror = "1"

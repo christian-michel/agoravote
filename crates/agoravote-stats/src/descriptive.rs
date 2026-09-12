@@ -73,7 +73,7 @@ pub fn median(values: &[f64]) -> Option<f64> {
     let mut sorted = values.to_vec();
     sorted.sort_by(|a, b| a.total_cmp(b));
     let mid = sorted.len() / 2;
-    if sorted.len() % 2 == 0 {
+    if sorted.len().is_multiple_of(2) {
         Some((sorted[mid - 1] + sorted[mid]) / 2.0)
     } else {
         Some(sorted[mid])
@@ -164,7 +164,7 @@ pub fn quartiles(values: &[f64]) -> Option<(f64, f64, f64)> {
     let n = sorted.len();
     let q2 = median(&sorted)?;
 
-    let (lower, upper) = if n % 2 == 0 {
+    let (lower, upper) = if n.is_multiple_of(2) {
         (&sorted[..n / 2], &sorted[n / 2..])
     } else {
         (&sorted[..n / 2], &sorted[n / 2 + 1..])

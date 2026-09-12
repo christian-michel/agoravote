@@ -25,16 +25,16 @@ tracing = "0.1"
 # compilation — compensé par les tests d'intégration de ce crate, qui
 # exercent chaque requête contre une vraie base (cf. `tests/`).
 #
-# Version 0.6 plutôt que 0.7/0.8 : contrainte de toolchain locale
-# (rustc 1.75 via apt, cf. Cargo.toml racine). Les versions plus
-# récentes de sqlx tirent, à cette date, des dépendances transitives
-# (`base64ct`, `rand_core`, `idna`...) qui exigent soit l'édition
-# Cargo 2024, soit un rustc bien plus récent (1.80+). sqlx 0.6 reste
-# fonctionnellement complet pour ce crate (requêtes, transactions,
-# JSONB, migrations) ; à réévaluer si la toolchain de développement
-# est mise à jour. AUCUNE de ces contraintes ne s'applique à l'image
-# Docker de production (`Dockerfile`), qui utilise un rustc à jour —
-# seul le développement dans CE bac à sable est concerné.
+# Version 0.6, pas encore 0.7/0.8 : rustc 1.94 (cf. Cargo.toml racine,
+# section "Contexte d'origine important") lève la contrainte de
+# toolchain qui empêchait de COMPILER sqlx 0.6 sans épinglages
+# transitifs (voir plus bas — ces pins ont pu être supprimés), mais ne
+# suffit pas à elle seule à justifier une migration vers 0.7/0.8 :
+# l'API de macros/offline/executor a changé entre ces versions majeures,
+# ce qui toucherait tout ce crate (déjà testé contre un vrai
+# PostgreSQL) pour un gain non demandé ici. Migration proposée comme
+# item de roadmap séparé (cf. docs/ROADMAP.md), pas faite dans cette
+# itération.
 sqlx = { version = "0.6", default-features = false, features = [
     "runtime-tokio-native-tls",
     "postgres",
@@ -46,19 +46,16 @@ sqlx = { version = "0.6", default-features = false, features = [
     "offline",
 ] }
 
-# Épinglages transitifs requis par la contrainte ci-dessus (chacun
-# bloquait la compilation avec rustc 1.75 pour une raison différente :
-# édition 2024, ou MSRV relevée à 1.80/1.85). Documentés individuellement
-# pour qu'un futur contributeur sache lesquels retirer une fois la
-# toolchain de développement mise à jour.
-idna_adapter = "=1.1.0"       # versions récentes : édition Cargo 2024
-native-tls = "=0.2.11"         # versions récentes : MSRV 1.80
-openssl = "=0.10.66"           # versions récentes : MSRV 1.80
-openssl-sys = "=0.9.103"       # suit le pin ci-dessus
-unicode-segmentation = "=1.10.1" # versions récentes : MSRV 1.85
-idna = "=0.5.0"                 # versions récentes : nécessite core::error::Error (rustc 1.81+)
-url = "=2.5.2"                  # compatible avec le pin idna ci-dessus
-crc = "=3.0.1"                  # versions récentes : MSRV 1.83 (utilisé par sqlx::migrate pour les checksums de migration)
+# Les épinglages transitifs précédemment nécessaires ici (`idna_adapter`,
+# `native-tls`, `openssl`/`openssl-sys`, `unicode-segmentation`, `idna`,
+# `url`, `crc`) sont retirés : ils ne servaient qu'à forcer des versions
+# transitives compatibles avec le MSRV 1.75 de l'environnement de
+# développement d'origine (cf. `docs/DEVLOG.md`, itération 2, et
+# itération 6 pour la levée de cette contrainte). Avec rustc 1.94,
+# `cargo build`/`cargo test` résolvent des versions plus récentes de
+# ces dépendances sans intervention. Si un jour l'environnement de
+# développement redescend sous rustc 1.80, réintroduire ces pins
+# (versions exactes conservées dans l'historique git de ce fichier).
 
 [dev-dependencies]
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
