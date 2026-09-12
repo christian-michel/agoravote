@@ -43,7 +43,17 @@ uuid = { version = "1", features = ["v4", "serde"] }
 # (SANS argument de feature) compile et teste réellement `challenge.rs`
 # aujourd'hui, dans CET environnement — seuls `signature.rs` et
 # `chain.rs` restent non vérifiables ici.
-subxt-signer = { version = "0.37", default-features = false, features = ["sr25519", "subxt"], optional = true }
+#
+# `std` requis en plus de `sr25519`/`subxt` : sans elle, `schnorrkel`
+# n'a accès à aucune source d'aléa OS (crate `getrandom_or_panic`, qui
+# panique volontairement plutôt que d'utiliser un RNG non
+# cryptographique) — découvert en compilant réellement ce crate contre
+# un vecteur de test signé (`verify_signature_accepte_une_signature_valide_du_compte_de_dev_alice`
+# ci-dessous), qui a paniqué à `Keypair::sign` avant cet ajout. Ne
+# concerne que la production locale de signatures de test dans ce
+# crate : la vérification en production (`verify_signature`) ne signe
+# jamais, mais le test, lui, en a besoin pour produire un vecteur.
+subxt-signer = { version = "0.37", default-features = false, features = ["sr25519", "subxt", "std"], optional = true }
 
 # --- État de vérification de ce crate dans CET environnement ---
 #

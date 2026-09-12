@@ -121,7 +121,8 @@ pub async fn check_membership(
         .to_value()
         .map_err(|e| G1Error::Chain(format!("décodage IdtyIndex : {e}")))?
         .as_u128()
-        .ok_or_else(|| G1Error::Chain("IdtyIndex n'est pas un entier".to_string()))? as u32;
+        .ok_or_else(|| G1Error::Chain("IdtyIndex n'est pas un entier".to_string()))?
+        as u32;
 
     // Étape 2 : index d'identité -> statut d'adhésion. L'existence et
     // le nom d'un pallet "Membership" séparé ne sont PAS confirmés

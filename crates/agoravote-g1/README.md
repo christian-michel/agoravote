@@ -27,49 +27,50 @@ workspace à un seul membre (cf. la section `[workspace]` vide dans son
 `Cargo.toml`), avec son propre `Cargo.lock`, indépendant de celui du
 projet principal.
 
-## Statut : code écrit, non compilé, non testé
+## Statut : compilé et testé pour `challenge`/`signature`, `chain` toujours non vérifié
 
-**C'est la seule exception dans tout ce projet.** Partout ailleurs
-(`agoravote-core`, `agoravote-voting`, `agoravote-stats`,
-`agoravote-store`, `agoravote-auth`, `agoravote-api`), chaque ligne
-livrée a été compilée et testée avant d'être présentée comme
-fonctionnelle — pour `agoravote-store`, contre un vrai PostgreSQL
-local. Ici, ça n'a pas été possible : la toolchain locale ne compile
-pas les dépendances crypto (cf. ci-dessus), et l'environnement de
-développement n'a de toute façon pas accès réseau à l'infrastructure
-Duniter/Ğ1 (testé, bloqué par la liste blanche réseau du bac à sable —
-cf. la conversation qui a précédé ce crate).
+**Mise à jour** (cf. `docs/DEVLOG.md`, itération 6) : compilé avec
+succès dans un environnement à toolchain Rust à jour (rustc 1.94),
+`docker compose`, accès réseau à `crates.io`/`static.rust-lang.org`.
+`challenge.rs` et `signature.rs` sont désormais compilés **et
+testés** (`cargo test -p agoravote-g1 --features chain-query`, 9
+tests verts, dont un vecteur sr25519 connu — compte de développement
+Substrate standard `//Alice`) — au même niveau d'exigence que le reste
+du projet. Une seule correction d'API a été nécessaire : `verify` est
+une fonction libre du module `subxt_signer::sr25519`, pas une méthode
+de `PublicKey`, comme le fichier l'indiquait déjà comme hypothèse à
+vérifier.
 
-Le code a été écrit avec le plus grand soin, en s'appuyant sur la
-documentation officielle et le code source du runtime Duniter v2
-consultés le 10 septembre 2026 — mais reste non vérifié. Chaque
-fichier documente précisément ce qui est confirmé et ce qui ne l'est
-pas.
+`chain.rs` compile également (API dynamique `subxt::dynamic`, non
+typée contre un schéma précis) mais **reste non vérifié à
+l'exécution** : l'infrastructure réseau Duniter/Ğ1 (`rpc.duniter.org`,
+`g1-squid.axiom-team.fr`, un nœud `gdev`) reste bloquée par la liste
+blanche réseau de cet environnement, testé à nouveau et confirmé
+bloqué. Les noms de stockage (`IdentityIndexOf`, `Membership`) restent
+donc des hypothèses non confirmées contre une métadonnée de nœud réel.
 
-## Pour le rendre utilisable
+## Pour le rendre entièrement utilisable
 
-1. **Compiler dans un environnement à toolchain Rust à jour** (pas
-   celui-ci) :
-   ```bash
-   cd crates/agoravote-g1
-   cargo build --features chain-query
-   ```
-   corriger les éventuelles erreurs d'API (`subxt`/`subxt-signer`
-   évoluent ; les noms de méthodes utilisés dans `signature.rs` et
-   `chain.rs` n'ont pas pu être vérifiés).
-
+1. ~~Compiler dans un environnement à toolchain Rust à jour~~ — fait
+   (rustc 1.94, cf. ci-dessus).
 2. **Confirmer les noms de stockage** contre un vrai nœud `gdev`
-   (réseau de test — jamais `g1` en premier) : cf. `chain.rs` pour la
-   liste précise de ce qui reste à confirmer (noms exacts des éléments
-   de stockage des pallets `Identity` et `Membership`).
-
-3. **Ajouter un test avec un vecteur sr25519 connu** dans
-   `signature.rs` (marqué comme manquant dans le fichier).
-
-4. **Réintégrer dans le workspace principal** une fois 1-3 validés, en
-   rajoutant `"crates/agoravote-g1"` à `members` dans le `Cargo.toml`
-   racine — et en vérifiant que `cargo test --workspace` passe
-   toujours entièrement à ce moment-là.
+   (réseau de test — jamais `g1` en premier), depuis un environnement
+   qui a accès réseau à l'infrastructure Duniter (celui-ci ne l'a
+   toujours pas) : cf. `chain.rs` pour la liste précise de ce qui reste
+   à confirmer (noms exacts des éléments de stockage des pallets
+   `Identity` et `Membership`).
+3. ~~Ajouter un test avec un vecteur sr25519 connu~~ — fait
+   (`signature.rs`, vecteur `//Alice`).
+4. **Réintégrer dans le workspace principal** une fois l'étape 2
+   validée, en rajoutant `"crates/agoravote-g1"` à `members` dans le
+   `Cargo.toml` racine — et en vérifiant que `cargo test --workspace`
+   passe toujours entièrement à ce moment-là. Pas encore fait : ce
+   crate reste volontairement hors du workspace principal tant que
+   `chain.rs` (activé seulement par la feature `chain-query`, non
+   utilisée par défaut) n'a pas été confronté à un nœud réel — même
+   si, contrairement à l'itération précédente, l'inclure ne casserait
+   plus la compilation du reste du workspace (toolchain suffisante
+   désormais).
 
 5. Seulement alors, câbler ce crate dans `agoravote-api` (nouvelles
    routes `/auth/g1/challenge`, `/auth/g1/verify` — cf. le sketch

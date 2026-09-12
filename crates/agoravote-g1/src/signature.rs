@@ -9,13 +9,12 @@
 //! l'utilisateur sur ce point. La signature est produite localement,
 //! côté client, par le portefeuille de l'utilisateur.
 //!
-//! ⚠️ Non compilé ni testé dans cet environnement — cf. l'avertissement
-//! de `lib.rs`. Les signatures exactes des types `subxt_signer::sr25519`
-//! utilisées ci-dessous (noms de méthodes, ordre des paramètres) sont
-//! reconstituées à partir de la documentation du crate et doivent être
-//! confirmées à la compilation dans un environnement à jour.
+//! Compilé et testé (rustc 1.94, `cargo test -p agoravote-g1 --features
+//! signature-verification`) — cf. `docs/DEVLOG.md` pour l'itération qui
+//! a levé cette vérification, et `crates/agoravote-g1/README.md` pour
+//! le statut à jour de ce crate.
 
-use subxt_signer::sr25519::{PublicKey, Signature};
+use subxt_signer::sr25519::{self, PublicKey, Signature};
 
 use crate::error::G1Error;
 
@@ -52,12 +51,11 @@ pub fn verify_signature(
     let public_key = PublicKey(public_key);
     let signature = Signature(signature);
 
-    // À confirmer à la compilation (cf. avertissement en tête de
-    // fichier) : `PublicKey::verify` est la méthode attendue par
-    // l'API documentée de `subxt-signer` 0.37, mais n'a pas pu être
-    // vérifiée ici. Si le nom ou la signature diffère, cet appel est
-    // le seul endroit à corriger.
-    Ok(public_key.verify(&signature, message))
+    // Confirmé par compilation contre subxt-signer 0.37.0 réel (rustc
+    // 1.94) : `verify` est une fonction libre du module `sr25519`, pas
+    // une méthode de `PublicKey` (l'inverse avait été supposé faute de
+    // pouvoir compiler dans l'environnement d'origine).
+    Ok(sr25519::verify(&signature, message, &public_key))
 }
 
 /// Décode une chaîne hexadécimale (avec ou sans préfixe `0x`) en
@@ -67,7 +65,7 @@ pub fn verify_signature(
 /// dans les API JSON des portefeuilles Ğ1.
 pub fn decode_hex(input: &str) -> Result<Vec<u8>, G1Error> {
     let input = input.strip_prefix("0x").unwrap_or(input);
-    if input.len() % 2 != 0 {
+    if !input.len().is_multiple_of(2) {
         return Err(G1Error::InvalidSignature);
     }
     (0..input.len())
@@ -103,9 +101,30 @@ mod tests {
         assert!(matches!(result, Err(G1Error::InvalidSignature)));
     }
 
-    // NOTE : un test "signature valide acceptée" contre un vecteur de
-    // test sr25519 connu devrait être ajouté ici avant toute mise en
-    // production (cf. avertissement de lib.rs) — non fait ici faute de
-    // pouvoir exécuter le moindre test dans cet environnement pour le
-    // valider soi-même.
+    // Vecteur de test connu : le compte de développement Substrate
+    // standard "//Alice" (dérivation publique, documentée par
+    // `subxt_signer::sr25519::dev`, jamais utilisée pour un vrai compte
+    // Ğ1) — cf. README du crate, étape 3 ("ajouter un test avec un
+    // vecteur sr25519 connu"), maintenant possible avec une toolchain
+    // à jour.
+    #[test]
+    fn verify_signature_accepte_une_signature_valide_du_compte_de_dev_alice() {
+        let alice = subxt_signer::sr25519::dev::alice();
+        let message = b"AgoraVote - preuve de possession de compte";
+        let signature = alice.sign(message);
+
+        let result = verify_signature(&alice.public_key().0, message, &signature.0);
+
+        assert!(matches!(result, Ok(true)));
+    }
+
+    #[test]
+    fn verify_signature_refuse_une_signature_valide_pour_un_autre_message() {
+        let alice = subxt_signer::sr25519::dev::alice();
+        let signature = alice.sign(b"message original");
+
+        let result = verify_signature(&alice.public_key().0, b"message modifie", &signature.0);
+
+        assert!(matches!(result, Ok(false)));
+    }
 }
