@@ -41,12 +41,17 @@ compilera contre un contrat obsolète sans avertissement.
 
 ## Ce qui n'est PAS fait
 
-- **Vérification visuelle** : ce frontend a été construit sans accès à
-  un navigateur réel dans l'environnement de développement — la
-  compilation TypeScript (`npx tsc -b`), le lint (`npx oxlint`) et le
-  build de production (`npm run build`) passent tous sans erreur,
-  mais **aucune capture d'écran n'a pu être prise**. Premier test
-  visuel à faire : `npm run dev` puis ouvrir `http://localhost:5173`.
+- **Vérification visuelle** : faite (cf. `docs/DEVLOG.md`, itération
+  6) — parcours complet (inscription, création de campagne,
+  formulaire, publication, vote, dépouillement, résultats publics)
+  conduit dans un vrai Chromium, desktop et mobile, zéro erreur
+  console. A révélé et corrigé un bug réel (`user` restait `null`
+  après un rechargement de page malgré un jeton valide, cf. `GET
+  /auth/me`) — cf. DEVLOG pour le détail. `npm install` a aussi
+  révélé un conflit de peer-dependency (`typescript` épinglé sur une
+  branche `6.x` incompatible avec `openapi-typescript`, jamais détecté
+  faute d'avoir pu lancer un `npm install` réel avant) — corrigé
+  (`typescript` ramené sur `^5.9.3`).
 - Types de question au-delà de choix unique/multiple (texte, nombre,
   échelle, classement) dans le constructeur de formulaire — l'API les
   supporte déjà (cf. `docs/openapi.yaml`), pas encore l'UI.

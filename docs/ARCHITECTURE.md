@@ -160,16 +160,19 @@ et `docs/G1_INTEGRATION.md` pour l'explication complète et le statut
 détaillé. Résumé : module optionnel de preuve de possession de compte
 Ğ1v2 (signature sr25519) et de vérification d'adhésion à la toile de
 confiance (requête à la chaîne Duniter v2). Son arbre de dépendances
-cryptographiques ne compile pas avec la toolchain de développement de
-ce projet ; l'inclure dans le workspace principal casserait la
-compilation de tout le reste — il vit donc dans son propre
-mini-workspace, avec son propre `Cargo.lock`.
+cryptographiques compile désormais avec une toolchain Rust à jour
+(rustc 1.94, cf. `docs/DEVLOG.md` itération 6) mais reste exclu du
+workspace principal : la partie réseau (`chain.rs`) n'a pas pu être
+vérifiée contre un vrai nœud Ğ1v2 (accès bloqué dans tous les
+environnements de développement utilisés jusqu'ici) — il vit donc
+toujours dans son propre mini-workspace, avec son propre
+`Cargo.lock`, en attendant cette confirmation.
 
 | Fichier | Statut |
 |---|---|
 | `challenge.rs` | Compilé et testé (3 tests verts) — génération de défi, pur, sans dépendance réseau |
-| `signature.rs` | Écrit, non compilé ici (feature `signature-verification`, désactivée par défaut) |
-| `chain.rs` | Écrit, non compilé ici (feature `chain-query`) — requêtes vers un nœud Ğ1v2 |
+| `signature.rs` | Compilé et testé (6 tests verts, dont un vecteur sr25519 connu `//Alice`) — feature `signature-verification`, désactivée par défaut, désormais vérifiable avec rustc 1.94+ |
+| `chain.rs` | Compilé (feature `chain-query`) mais non vérifié à l'exécution — réseau Duniter/Ğ1 toujours bloqué dans cet environnement, noms de stockage non confirmés |
 
 ## Frontend — `frontend/`
 
@@ -183,16 +186,18 @@ compilation TypeScript plutôt qu'en bug silencieux à l'exécution.
 | Fichier/dossier | Rôle |
 |---|---|
 | `src/api/` | Client HTTP typé + schéma généré |
-| `src/auth/AuthContext.tsx` | Session React (login/register/logout, jeton en `localStorage`) |
+| `src/auth/AuthContext.tsx` | Session React (login/register/logout, jeton en `localStorage`, confirmation du jeton via `GET /auth/me` au chargement) |
 | `src/components/` | Composants réutilisables (UI de base, constructeur de formulaire, panneau de dépouillement) |
 | `src/pages/` | Un fichier par écran (cf. `frontend/README.md` pour la table complète) |
 | `DESIGN.md` | Direction visuelle et sa justification |
 
-Compilation TypeScript, lint et build de production tous vérifiés
-verts pendant le développement — **jamais testé dans un vrai
-navigateur** dans cet environnement (aucun outil de ce type
-disponible ici). Premier test à faire : `docker compose up` puis
-`http://localhost:8080`.
+Compilation TypeScript, lint et build de production vérifiés verts, et
+désormais **testé dans un vrai navigateur** (Chromium, cf.
+`docs/DEVLOG.md` itération 6) : parcours complet conduit de bout en
+bout, desktop et mobile, zéro erreur console — a révélé un bug réel
+(session perdue visuellement après rechargement de page) et un
+conflit de peer-dependency npm, tous deux corrigés (cf. DEVLOG pour le
+détail).
 
 ## Ce que ce prototype ne fait pas encore
 

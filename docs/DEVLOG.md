@@ -442,3 +442,194 @@ l'utilisateur : `docker compose up` puis `http://localhost:8080`.
    d'audit (cf. itération 3).
 5. Types de question supplémentaires dans le constructeur de
    formulaire (texte, nombre, échelle, classement).
+
+## Itération 6 — nouvel environnement : vérification visuelle, `agoravote-g1`, épinglages
+
+Objectif : ce projet change d'environnement de développement pour la
+première fois (cf. `CLAUDE.md`, section "Contexte d'origine
+important") — vérifier ce qui devient possible, et traiter en priorité
+les deux items de tête de `docs/ROADMAP.md` ("Priorité immédiate") qui
+en dépendaient : vérification visuelle du frontend, et compilation de
+`agoravote-g1`.
+
+### Ce qui a changé d'environnement (constaté, pas supposé)
+
+- `rustc 1.94.1` / `cargo 1.94.1` (contre 1.75 via apt auparavant).
+- `docker 29.3.1` et `docker compose v5.1.1` installés, démon
+  fonctionnel après démarrage manuel (`dockerd` en tâche de fond — le
+  script `/etc/init.d/docker` échoue sur un `ulimit` sans rapport).
+  **Mais** les couches d'images Docker Hub (`production.cloudfront.docker.com`)
+  restent bloquées par la politique réseau de ce bac à sable (`403`
+  côté proxy sortant) : `docker compose up` reste donc inutilisable
+  ici, contrairement à ce qu'annonçait `CLAUDE.md`. PostgreSQL 16 et
+  Node 22/npm sont en revanche installés nativement et pleinement
+  utilisables.
+- Accès réseau à `crates.io`/`static.rust-lang.org` confirmé (`200`).
+  Accès à l'infrastructure Duniter/Ğ1 (`rpc.duniter.org`,
+  `g1-squid.axiom-team.fr`, tout nœud `gdev`) **toujours bloqué**
+  (`403` côté proxy sortant) — testé explicitement, pas supposé
+  inchangé.
+- Chromium pré-installé (`/opt/pw-browsers`), utilisable avec
+  Playwright pour piloter un vrai navigateur — première fois que ce
+  projet peut vérifier visuellement son frontend.
+
+### `agoravote-g1` : compilé et testé pour la première fois
+
+`cargo build -p agoravote-g1 --features chain-query` échouait
+auparavant faute de toolchain compatible (cf. itération 4). Avec
+rustc 1.94, il compile **intégralement**, `chain-query` compris. Une
+seule correction d'API a été nécessaire (l'hypothèse documentée dans
+`signature.rs` était fausse) : `verify` est une fonction libre du
+module `subxt_signer::sr25519`, pas une méthode de `PublicKey`.
+
+Une seconde correction, découverte en écrivant le test manquant
+(ci-dessous) : la feature `sr25519` de `subxt-signer` seule ne suffit
+pas à signer (uniquement à vérifier) — sans la feature `std`, la
+génération d'aléa (`schnorrkel` → `getrandom_or_panic`) panique
+volontairement plutôt que d'utiliser un RNG non cryptographique.
+Ajoutée aux features activées par `signature-verification`.
+
+`challenge.rs` et `signature.rs` sont désormais compilés **et
+testés** au même niveau d'exigence que le reste du projet (9 tests
+verts, `cargo test -p agoravote-g1 --features chain-query`) : les 2
+tests manquants identifiés dans le README du crate ont été ajoutés,
+contre le compte de développement Substrate standard `//Alice`
+(vecteur sr25519 connu, jamais un vrai compte Ğ1) — signature valide
+acceptée, signature valide mais message modifié refusée.
+
+`chain.rs` compile également mais reste **non vérifié à l'exécution** :
+l'infrastructure réseau Duniter/Ğ1 est toujours bloquée dans cet
+environnement (voir ci-dessus), donc les noms de stockage
+(`IdentityIndexOf`, `Membership`) restent des hypothèses non
+confirmées contre un nœud réel. Le crate reste donc volontairement
+hors du workspace principal (cf. `crates/agoravote-g1/README.md`,
+section "Pour le rendre entièrement utilisable" mise à jour) —
+seule l'étape 2 de son propre plan (confirmer les noms de stockage)
+reste bloquée, pas techniquement mais par l'accès réseau.
+
+### Réévaluation des épinglages de version
+
+Avec rustc 1.94 (bien au-delà des seuils 1.76/1.79/1.80/1.81/1.83/1.85
+qui avaient motivé chaque épinglage) :
+
+- `uuid` (racine, `[workspace.dependencies]`) : épinglage `=1.10.0`
+  retiré, remonté à `1.26.1` sans changement de code nécessaire.
+- `agoravote-store` : les 7 épinglages transitifs de `sqlx`
+  (`idna_adapter`, `native-tls`, `openssl`/`openssl-sys`,
+  `unicode-segmentation`, `idna`, `url`, `crc`) retirés — `cargo
+  build`/`cargo test` résolvent désormais des versions plus récentes
+  sans intervention. Revérifié contre un vrai PostgreSQL 16 local (8
+  tests d'intégration, tous verts) après ce changement, pas seulement
+  compilé.
+- `sqlx` lui-même **reste en 0.6** (pas de migration vers 0.7/0.8) :
+  la contrainte de toolchain qui l'imposait est levée, mais une
+  migration de version majeure changerait l'API macros/offline/
+  executor dans tout `agoravote-store` (déjà testé contre PostgreSQL
+  réel) pour un gain non demandé par cette itération — proposé comme
+  item de roadmap séparé plutôt que fait à la volée.
+
+### Frontend vérifié dans un vrai navigateur — un bug réel trouvé et corrigé
+
+Premier `npm install` réel de ce projet : a immédiatement échoué
+(`ERESOLVE`) — `typescript` épinglé sur `~6.0.2` dans `package.json`
+est incompatible avec le `peerDependencies` de `openapi-typescript`
+(`^5.x`, toujours vrai en version 7.13.0, la plus récente). Ce
+conflit existait déjà dans le `package-lock.json` commité, jamais
+détecté faute d'avoir pu lancer un `npm install` propre auparavant.
+Corrigé : `typescript` ramené à `^5.9.3` (dernière 5.x stable),
+`package-lock.json` régénéré. `npx tsc -b`, `npx oxlint` et `npm run
+build` toujours verts après ce changement.
+
+Backend lancé en local (`cargo run -p agoravote-api`, PostgreSQL réel
+— `docker compose` indisponible, cf. ci-dessus) et frontend en mode
+développement (`npm run dev`, proxy Vite déjà configuré vers le port
+3000), pilotés avec Chromium/Playwright : parcours complet conduit de
+bout en bout — inscription, création de campagne, construction du
+formulaire, publication, vote citoyen (session anonyme), dépouillement
+`voting.approval`, page de résultats publique — plus la page de
+connexion et la page d'accueil/inscription en viewport mobile
+(390×844). Rendu visuel conforme à la direction "papier de scrutin
+civique" documentée dans `frontend/DESIGN.md`, mise en page mobile
+sans débordement, zéro erreur console sur l'ensemble du parcours.
+
+**Un bug réel trouvé** : après un rechargement complet de page sur une
+route admin (`/admin`, `/admin/campagnes/:id`), l'en-tête n'affichait
+plus AUCUN lien (ni "Tableau de bord/Se déconnecter", ni "Se
+connecter/Créer un compte") et "Bonjour {nom}" s'affichait vide —
+alors que le jeton de session restait valide en `localStorage`, donc
+l'utilisateur restait bel et bien connecté côté serveur. Cause : `Shell.tsx`
+conditionne l'affichage sur `status === "authenticated" && user`, mais
+`AuthContext` ne remplissait `user` qu'au moment d'un `login`/
+`register` — jamais revalidé au chargement de page à partir d'un jeton
+déjà stocké, faute de route "qui suis-je" côté API (limite déjà
+documentée dans le code, `AuthContext.tsx`, avant cette itération).
+Pire : `AdminHome.handleCreate` fait `if (!user) return;` — "Créer la
+campagne" échouait alors silencieusement après un rechargement, sans
+aucun message d'erreur. `App.tsx` anticipait même ce problème dans un
+commentaire (`status === "checking"`) sans que l'état correspondant
+n'ait jamais été implémenté.
+
+Corrigé de bout en bout, suivant la convention du projet
+(`docs/openapi.yaml` source de vérité en premier) :
+1. `GET /auth/me` ajouté à `docs/openapi.yaml`, implémenté dans
+   `agoravote-api/src/routes.rs` (réutilise l'extracteur `AuthUser`
+   déjà validé ailleurs, aucune logique nouvelle), 2 nouveaux tests
+   d'intégration (jeton valide → utilisateur renvoyé ; sans jeton →
+   401).
+2. Types frontend régénérés (`npm run gen:api`).
+3. `AuthContext.tsx` : ajout d'un état `"checking"` (que `App.tsx`
+   attendait déjà) entre le montage et la confirmation du jeton par
+   `GET /auth/me` ; en cas d'échec (jeton expiré/invalide), la session
+   locale est effacée plutôt que de rester bloquée en
+   "authenticated" sans utilisateur.
+4. `App.tsx` (`RequireAuth`) et `Home.tsx` mis à jour pour traiter
+   explicitement ce nouvel état plutôt que de tomber implicitement
+   dans la branche "anonyme".
+
+Revérifié après correction, dans les mêmes conditions (vrai navigateur,
+rechargement complet de `/admin`) : en-tête et tableau de bord
+corrects, zéro erreur console.
+
+### Ce qui a été vérifié concrètement
+
+- `agoravote-g1` : 9 tests verts (`cargo test -p agoravote-g1
+  --features chain-query`), `cargo fmt --check` et
+  `clippy --all-features -- -D warnings` silencieux.
+- Workspace principal : `make check` vert (fmt, clippy, 46 tests) à la
+  fois avant et après le retrait des épinglages de version, plus 8
+  tests d'intégration PostgreSQL réels revérifiés séparément après ce
+  retrait.
+- Deux nouveaux lints clippy apparus avec rustc 1.94
+  (`manual_is_multiple_of`) corrigés dans `agoravote-stats` (préexistant
+  au reste de cette itération, découvert par le premier `make check`
+  lancé dans ce nouvel environnement).
+- Frontend : `npx tsc -b`, `npx oxlint`, `npm run build` verts ; parcours
+  complet vérifié dans un vrai Chromium (desktop et mobile), avant et
+  après le correctif `/auth/me`.
+- `.gitignore` ajouté à la racine (absent jusqu'ici — `target/` et
+  `node_modules/` n'étaient tout simplement jamais apparus dans aucun
+  environnement de développement précédent, faute d'avoir pu réellement
+  compiler/installer).
+
+### Ce qui reste non vérifié (honnêteté du statut)
+
+`chain.rs` (`agoravote-g1`) compile mais reste non exécuté contre un
+nœud Ğ1v2 réel — accès réseau à cette infrastructure toujours bloqué
+dans tous les environnements de développement utilisés jusqu'ici. Les
+noms de stockage qu'il interroge restent des hypothèses.
+
+### Prochaines itérations candidates (mise à jour)
+
+1. Confirmer les noms de stockage de `chain.rs` contre un nœud `gdev`
+   réel, depuis un environnement qui a accès à l'infrastructure
+   Duniter — puis réintégrer `agoravote-g1` au workspace principal.
+2. `GET /campaigns` (liste) côté API, pour remplacer le palliatif de
+   mémorisation locale du tableau de bord.
+3. Migration `sqlx` 0.6 → 0.7/0.8 (désormais possible techniquement,
+   pas faite cette itération — cf. ci-dessus).
+4. Permissions fines, flux d'invitation d'organisateurs, journal
+   d'audit (cf. itération 3).
+5. Types de question supplémentaires dans le constructeur de
+   formulaire (texte, nombre, échelle, classement).
+6. `cargo audit` en CI (désormais possible avec rustc 1.94, cf.
+   `docs/SECURITY.md` §1) — pas fait cette itération.

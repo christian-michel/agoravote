@@ -22,10 +22,10 @@ personne qui reprend le projet) et [`docs/ROADMAP.md`](docs/ROADMAP.md)
 
 Une interface React consomme l'API (`frontend/`, cf. son
 [`README.md`](frontend/README.md) et [`DESIGN.md`](frontend/DESIGN.md)
-pour la direction visuelle). Compilée et testée (TypeScript, lint,
-build de production tous verts) mais **jamais vérifiée dans un vrai
-navigateur** dans cet environnement de développement — premier test à
-faire chez vous :
+pour la direction visuelle). Compilée, testée (TypeScript, lint, build
+de production) et désormais **vérifiée dans un vrai navigateur**
+(cf. [`docs/DEVLOG.md`](docs/DEVLOG.md), itération 6 — parcours complet,
+desktop et mobile, zéro erreur console) :
 
 ```bash
 docker compose up -d
@@ -211,9 +211,9 @@ vote inconnue refusée — voir `docs/DEVLOG.md` pour le détail complet.
   frontend (types TypeScript générés automatiquement).
 - **Frontend** (`frontend/`) : interface React consommant l'API — cf.
   section dédiée plus haut et `frontend/README.md`.
-- **46 tests automatisés**, tous verts (`cargo test --workspace`),
-  dont 11 tests d'intégration du routeur HTTP (authentification,
-  formulaire, anti double-vote), plus 8 tests d'intégration PostgreSQL
+- **48 tests automatisés**, tous verts (`cargo test --workspace`),
+  dont 13 tests d'intégration du routeur HTTP (authentification,
+  formulaire, anti double-vote, `GET /auth/me`), plus 8 tests d'intégration PostgreSQL
   (`cargo test -p agoravote-store -- --ignored`, nécessitent une base
   réelle).
 
@@ -242,21 +242,23 @@ bloqueraient probablement une mise en production :
    de l'API est disponible.
 6. **Interface web** (§10) : un frontend React existe (`frontend/`)
    mais reste partiel — construction de formulaire limitée à
-   choix unique/multiple, pas de liste de campagnes côté serveur, et
-   surtout **jamais vérifié dans un vrai navigateur** (cf.
-   `frontend/README.md`).
+   choix unique/multiple, pas de liste de campagnes côté serveur.
+   Vérifié dans un vrai navigateur depuis l'itération 6 (cf.
+   `docs/DEVLOG.md`).
 7. **Méthodes de vote avancées** (Condorcet/Schulze, STV, jugement
    majoritaire — §15.1) : hors MVP, pas commencées.
 8. **Modules WASM** (§6.1) : seul le chargement natif existe.
 9. **Module d'identité Ğ1/Duniter** (`crates/agoravote-g1`) : vision
-   posée dans l'addendum v0.3, implémentation commencée mais **non
-   vérifiée** — code écrit, 3 tests verts sur la partie sans
-   dépendance externe, le reste (signature, requête à la chaîne) non
-   compilé faute de toolchain compatible dans l'environnement de
-   développement. Volontairement exclu du workspace principal pour ne
-   pas risquer sa stabilité (cf. `crates/agoravote-g1/README.md` et
-   `docs/G1_INTEGRATION.md` pour le détail complet et la marche à
-   suivre).
+   posée dans l'addendum v0.3. Compilé et testé depuis l'itération 6
+   (cf. `docs/DEVLOG.md`) pour la preuve de possession de clé
+   (`challenge`/`signature`, 9 tests verts) ; la partie requête à la
+   chaîne (`chain.rs`) compile mais reste **non vérifiée à
+   l'exécution**, faute d'accès réseau à l'infrastructure Duniter dans
+   tout environnement de développement utilisé jusqu'ici. Volontairement
+   exclu du workspace principal pour ne pas réintégrer un module dont
+   les noms de stockage restent des hypothèses non confirmées (cf.
+   `crates/agoravote-g1/README.md` et `docs/G1_INTEGRATION.md` pour le
+   détail complet et la marche à suivre).
 
 ## Licence
 

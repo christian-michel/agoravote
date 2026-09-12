@@ -11,18 +11,31 @@ coché — l'historique de ce qui a été priorisé et quand a de la valeur.
 
 ## Priorité immédiate
 
-- [ ] **Vérifier le frontend dans un vrai navigateur.** Jamais fait
-      jusqu'ici (pas de navigateur disponible pendant son
-      développement) — `docker compose up` puis `http://localhost:8080`.
-      Corriger ce qui ne va pas visuellement avant d'ajouter quoi que
-      ce soit d'autre au frontend.
-- [ ] **Réévaluer/compiler `agoravote-g1`** avec une toolchain à jour
-      (cf. `CLAUDE.md`, section environnement). Si ça compile :
-      confirmer les noms de stockage contre un nœud `gdev` réel (jamais
-      `g1` en premier), ajouter un test avec un vecteur sr25519 connu,
-      réintégrer au workspace principal.
+- [x] **Vérifier le frontend dans un vrai navigateur.** Fait — cf.
+      `docs/DEVLOG.md` itération 6 : parcours complet piloté par
+      Chromium/Playwright (desktop + mobile), a révélé et corrigé un
+      bug réel (session affichée comme perdue après un rechargement de
+      page, `GET /auth/me` ajouté pour le corriger) et un conflit de
+      peer-dependency npm (`typescript` ramené à `^5.9.3`).
+- [x] **Compiler `agoravote-g1`** avec une toolchain à jour, ajouter un
+      test avec un vecteur sr25519 connu. Fait — cf. `docs/DEVLOG.md`
+      itération 6 (rustc 1.94, 9 tests verts dont le vecteur `//Alice`).
+- [ ] **Confirmer les noms de stockage de `agoravote-g1` (`chain.rs`)
+      contre un nœud `gdev` réel**, puis réintégrer le crate au
+      workspace principal. Toujours bloqué : l'accès réseau à
+      l'infrastructure Duniter/Ğ1 reste refusé par la politique réseau
+      de tous les environnements de développement utilisés jusqu'ici
+      (testé et confirmé à nouveau en itération 6, pas juste supposé
+      inchangé) — nécessite un environnement qui a cet accès.
 
 ## Backend
+
+- [ ] Migration `sqlx` 0.6 → 0.7/0.8 dans `agoravote-store` — la
+      contrainte de toolchain qui l'empêchait est levée (rustc 1.94,
+      cf. `docs/DEVLOG.md` itération 6), mais c'est un changement d'API
+      majeur (macros/offline/executor) qui touche tout le crate déjà
+      testé contre PostgreSQL réel ; à faire comme item dédié, pas à la
+      volée.
 
 - [ ] `GET /campaigns` (liste, filtrée par organisation) — remplace le
       palliatif de mémorisation locale du tableau de bord frontend
@@ -70,9 +83,11 @@ Cf. `docs/G1_INTEGRATION.md` pour le détail complet de chaque étape.
 
 ## Sécurité et robustesse
 
-- [ ] `cargo audit` en CI dès qu'une toolchain récente est disponible
-      (job prévu mais commenté dans `.github/workflows/ci.yml`,
-      cf. `docs/SECURITY.md` §1).
+- [ ] `cargo audit` en CI — la condition posée ici ("dès qu'une
+      toolchain récente est disponible") est remplie depuis l'itération
+      6 (`docs/DEVLOG.md`, rustc 1.94) mais le job reste à décommenter
+      dans `.github/workflows/ci.yml` (cf. `docs/SECURITY.md` §1) ;
+      pas fait cette itération, la CI elle-même n'a pas été modifiée.
 - [ ] Limitation de débit (rate limiting) sur `/auth/login` et
       `/auth/register` — Argon2id ralentit le brute-force sur un mot
       de passe donné, pas les tentatives réparties sur des comptes
