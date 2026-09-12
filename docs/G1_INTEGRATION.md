@@ -1,9 +1,10 @@
 # Intégration Ğ1v2 — recherche, architecture, statut
 
 Ce document rassemble tout ce qui concerne le module d'identité Ğ1
-optionnel (`crates/agoravote-g1`, cf. son `README.md` pour son statut
-particulier de crate exclu du workspace principal) : ce qui a été
-vérifié, comment le protocole est conçu, et ce qu'il reste à faire.
+optionnel (`crates/agoravote-g1`, membre du workspace principal depuis
+l'itération 8 — cf. son `README.md` pour le détail de cette
+réintégration) : ce qui a été vérifié, comment le protocole est
+conçu, et ce qu'il reste à faire.
 
 ## 1. Ce qui a été vérifié (recherche, pas supposition)
 
@@ -42,9 +43,13 @@ en conversation) :
 
 | Étape | Question | Où dans le code |
 |---|---|---|
-| 1. Défi | Générer un texte aléatoire à signer | `challenge.rs` — **écrit, compilé, testé, fonctionne** |
-| 2. Preuve de possession | Vérifier qu'une signature correspond à la clé publique annoncée | `signature.rs` — écrit, non testé (dépendance non compilable ici) |
-| 3. Vérification d'adhésion | Interroger la chaîne : ce compte est-il membre actif ? | `chain.rs` — écrit, non testé (dépendance non compilable ici + pas d'accès réseau) |
+| 1. Défi | Générer un texte aléatoire à signer, et vérifier sa fraîcheur sans état serveur | `challenge.rs` — **écrit, compilé, testé, câblé** (`POST /auth/g1/challenge`) |
+| 2. Preuve de possession | Vérifier qu'une signature correspond à la clé publique annoncée | `signature.rs` — **écrit, compilé, testé, câblé** (`POST /auth/g1/verify`, feature `signature-verification`) |
+| 3. Vérification d'adhésion | Interroger la chaîne : ce compte est-il membre actif ? | `chain.rs` — écrit, compile (feature `chain-query`) mais **non testé et non câblé à aucune route** (dépendance réseau non vérifiable ici) |
+
+Cf. `docs/DEVLOG.md` itération 8 pour l'implémentation complète des
+étapes 1 et 2, et `docs/SECURITY.md` §8 pour ce que cette
+implémentation prouve — et ne prouve PAS (étape 3 non câblée).
 
 **La phrase de 12 mots ne transite jamais vers AgoraVote.** Le
 portefeuille de l'utilisateur (Cesium², Ğecko, extension navigateur)
@@ -54,97 +59,95 @@ un principe non négociable, documenté en tête de `signature.rs`.
 ## 3. Ce qui est réellement vérifié aujourd'hui
 
 ```bash
-cargo test -p agoravote-g1 --lib challenge
-# 3 tests, tous verts — génération de défi, expiration, unicité
+cargo test -p agoravote-g1 --features chain-query
+# 13 tests, tous verts — défi (génération, expiration, fraîcheur sans
+# état serveur), signature (dont un vecteur sr25519 connu, //Alice)
+
+cargo test -p agoravote-api
+# 17 tests, tous verts, dont 4 tests g1_* utilisant de VRAIES
+# signatures sr25519 (subxt-signer en dev-dependency), pas des mocks
 ```
 
-C'est peu au regard de l'ambition du module, mais c'est du solide :
-aucune ligne testée n'a été présentée comme plus fiable qu'elle ne
-l'est.
+Le protocole défi/signature (§2, étapes 1 et 2) est intégralement
+câblé et testé. Seule l'étape 3 (vérification d'adhésion à la toile de
+confiance) reste non vérifiée — cf. §4.
 
-## 4. Sketch d'intégration dans `agoravote-api` (non câblé, à titre d'exemple)
+## 4. Intégration dans `agoravote-api` — câblée (itération 8)
 
-Ce qui suit décrit la forme que prendrait l'intégration, **une fois**
-`agoravote-g1` compilé et vérifié (cf. son `README.md`, section
-« Pour le rendre utilisable »). Ce code n'existe pas dans
-`agoravote-api` aujourd'hui — l'ajouter maintenant romprait la
-compilation du workspace principal (cf. §1 de ce document).
-
-### Nouvelles routes
+`crates/agoravote-api/src/routes.rs` implémente les deux routes
+suivantes (cf. `docs/openapi.yaml` pour le contrat complet), et
+`crates/agoravote-api/Cargo.toml` dépend d'`agoravote-g1` avec
+uniquement la feature `signature-verification` :
 
 | Route | Rôle |
 |---|---|
-| `POST /auth/g1/challenge` | Génère un [`agoravote_g1::Challenge`] et le renvoie au client |
-| `POST /auth/g1/verify` | Reçoit `{public_key, signature}`, vérifie la signature, interroge la chaîne, crée une session (même mécanisme que `agoravote-auth`) |
+| `POST /auth/g1/challenge` | Génère un [`agoravote_g1::Challenge`] et le renvoie au client — sans état côté serveur, cf. `Challenge::verify_freshness` |
+| `POST /auth/g1/verify` | Reçoit `{organization_id, public_key_hex, signature_hex, message}`, vérifie la signature, retrouve ou provisionne le `User`/`G1Link` associé, crée une session (même mécanisme que `agoravote-auth`) |
 
-### Esquisse du second handler
+`g1_verify` (cf. sa doc dans `routes.rs`) : décode la clé publique et
+la signature en hexadécimal, vérifie la fraîcheur du défi
+(`Challenge::verify_freshness`) **puis** la signature
+(`agoravote_g1::verify_signature`) sur le message réellement reçu —
+jamais l'inverse ni l'une sans l'autre (cf. le test dédié dans
+`challenge.rs` qui documente pourquoi). Ne fait jamais confiance au
+`voter_id`/à l'identité déclarée par le client sans preuve (même
+principe déjà appliqué dans `cast_ballot`, cf. `docs/SECURITY.md` §7),
+et ne stocke jamais la clé privée ni la phrase de 12 mots — seule la
+clé **publique** est conservée, via `G1Link` (`agoravote-core::auth`),
+associée au `User` comme second moyen d'authentification possible,
+jamais à la place d'`Account`.
 
-```rust
-async fn g1_verify(
-    State(state): State<AppState>,
-    Json(req): Json<G1VerifyRequest>, // { public_key_hex, signature_hex, challenge_message }
-) -> Result<Json<AuthResponse>, (StatusCode, Json<ErrorResponse>)> {
-    let public_key = agoravote_g1::signature::decode_hex(&req.public_key_hex)
-        .map_err(|_| bad_request("clé publique invalide"))?;
-    let signature = agoravote_g1::signature::decode_hex(&req.signature_hex)
-        .map_err(|_| bad_request("signature invalide"))?;
+**Volontairement absent de ce câblage : `chain.rs`/`chain-query`.**
+`agoravote-api` n'active pas cette feature — cf. §1 ci-dessus et
+`docs/SECURITY.md` §8 pour les deux raisons (une actuelle, une
+durable) pour lesquelles cette vérification de toile de confiance
+n'est pas branchée à `/auth/g1/verify`.
 
-    let valid = agoravote_g1::verify_signature(&public_key, req.challenge_message.as_bytes(), &signature)
-        .map_err(|_| bad_request("format de preuve invalide"))?;
-    if !valid {
-        return Err(unauthorized_login()); // même message anti-énumération que /auth/login
-    }
+### Modèle de données (fait)
 
-    // Optionnel selon la campagne (§13) : exiger un compte membre actif.
-    let membership = agoravote_g1::chain::check_membership(&state.g1_rpc_url, &public_key[..32].try_into().unwrap())
-        .await
-        .map_err(internal_error_g1)?;
-    if !membership.is_member {
-        return Err(bad_request("ce compte Ğ1 n'est pas membre actif de la toile de confiance"));
-    }
+`G1Link { id: Id, user_id: Id, public_key_hex: String, linked_at:
+DateTime<Utc> }` dans `agoravote-core::auth`, persisté par
+`agoravote-store` dans la table `g1_links` (migration
+`0003_g1_link.sql`), indexée `UNIQUE` sur `public_key_hex` — même
+logique que la contrainte d'unicité d'email sur `Account`. Testé contre
+un vrai PostgreSQL (`crates/agoravote-store/tests/postgres_integration.rs`).
 
-    // Retrouver ou créer le User/Account associé à cette clé publique
-    // Ğ1, puis émettre une session — même mécanisme que
-    // `agoravote_auth::issue_session`, réutilisé tel quel.
-    // ...
-}
-```
+### Frontend (fait)
 
-Notez ce que ce sketch NE fait PAS : il ne fait jamais confiance au
-`voter_id` fourni par le client sans vérification (même principe déjà
-appliqué dans `cast_ballot`, cf. `docs/SECURITY.md` §7), et il ne
-stocke jamais la clé privée ni la phrase de 12 mots — seule la clé
-**publique** (qui est par nature publique) est conservée, associée au
-`User` comme un second moyen d'authentification possible.
-
-### Modèle de données à ajouter
-
-Suivant le même principe que `agoravote_core::auth::Account`
-(§13) : un nouveau type `G1Link { user_id: Id, public_key: String,
-linked_at: DateTime<Utc> }` dans `agoravote-core`, persisté par
-`agoravote-store` dans une nouvelle table, indexée sur `public_key`
-(unique — un compte Ğ1 ne peut être lié qu'à un seul utilisateur
-AgoraVote, même logique que la contrainte d'unicité d'email déjà en
-place).
+Écran `/connexion-g1` (`frontend/src/pages/G1Login.tsx`, planche 17 de
+l'addendum) : parcours manuel en deux étapes (générer un défi, coller
+la clé publique et la signature obtenues d'un portefeuille externe —
+aucune intégration d'extension de portefeuille pour l'instant). Copie
+honnête sur ce que cette connexion prouve (possession de clé) et ne
+prouve pas (appartenance à la toile de confiance).
 
 ## 5. Ce qui reste à faire, dans l'ordre
 
-1. Compiler `agoravote-g1` dans un environnement à toolchain Rust à
-   jour ; corriger les éventuelles erreurs d'API `subxt`/`subxt-signer`.
-2. Confirmer les noms exacts de stockage (`Identity::IdentityIndexOf`,
+1. ~~Compiler `agoravote-g1` dans un environnement à toolchain Rust à
+   jour~~ — fait (itération 6).
+2. **Confirmer les noms exacts de stockage** (`Identity::IdentityIndexOf`,
    pallet `Membership` ou équivalent) contre un nœud `gdev` réel —
-   **jamais `g1` en premier**.
-3. Ajouter un test de signature avec un vecteur sr25519 connu.
-4. Réintégrer le crate dans le workspace principal, vérifier que
-   `cargo test --workspace` passe toujours intégralement.
-5. Implémenter le sketch du §4 ci-dessus dans `agoravote-api`, avec
-   les mêmes standards que le reste du projet : tests d'intégration,
-   `clippy -D warnings`, test de bout en bout contre un vrai réseau
-   `gdev`.
-6. Documenter dans `docs/SECURITY.md` les implications spécifiques
-   (le RPC configuré doit être fiable — un nœud malveillant pourrait
-   mentir sur le statut de membre ; envisager d'interroger plusieurs
-   nœuds indépendants pour une décision aussi sensible).
+   **jamais `g1` en premier** — depuis un environnement qui a accès
+   réseau à l'infrastructure Duniter (aucun de ceux utilisés jusqu'ici
+   ne l'a). Bloquant pour la suite.
+3. ~~Ajouter un test de signature avec un vecteur sr25519 connu~~ —
+   fait (itération 6).
+4. ~~Réintégrer le crate dans le workspace principal~~ — fait
+   (itération 8).
+5. ~~Implémenter le sketch du §4 ci-dessus dans `agoravote-api`~~ —
+   fait pour `signature-verification` (itération 8). Reste, une fois
+   l'étape 2 validée : câbler `chain-query`
+   (`chain::check_membership`) comme vérification optionnelle
+   supplémentaire sur `/auth/g1/verify`, avec les mêmes standards que
+   le reste du projet (tests d'intégration, `clippy -D warnings`,
+   test de bout en bout contre un vrai réseau `gdev`).
+6. ~~Documenter dans `docs/SECURITY.md` les implications spécifiques~~
+   — fait par anticipation (itération 8, §8 : le RPC configuré doit
+   être fiable, un nœud malveillant pourrait mentir sur le statut de
+   membre ; interroger plusieurs nœuds indépendants recommandé avant
+   toute décision de légitimité de vote basée sur ce résultat).
+7. Intégration d'une extension de portefeuille Ğ1 côté frontend, pour
+   remplacer le copier-coller manuel actuel de `/connexion-g1`.
 
 ## 6. Références
 

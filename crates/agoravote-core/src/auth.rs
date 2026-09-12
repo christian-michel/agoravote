@@ -97,6 +97,44 @@ impl Session {
     }
 }
 
+/// Lien entre un [`crate::User`] et une clé publique Ğ1v2 — second
+/// moyen de connexion optionnel, en plus (jamais à la place) du
+/// couple email/mot de passe porté par [`Account`], cf. l'addendum
+/// v0.3 du cahier des charges (« Identité décentralisée ») et la note
+/// ci-dessus sur la séparation `User`/`Account`.
+///
+/// Ne contient que la clé **publique** (hex, 32 octets sr25519) : la
+/// clé privée et la phrase de 12 mots d'un participant ne transitent
+/// jamais vers AgoraVote — cf. `agoravote_g1::signature`, dont la
+/// vérification de preuve de possession est le seul mécanisme par
+/// lequel ce lien peut être créé (jamais une simple déclaration de
+/// clé non prouvée).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct G1Link {
+    pub id: Id,
+    pub user_id: Id,
+
+    /// Encodage hexadécimal (sans préfixe `0x`) des 32 octets de la
+    /// clé publique sr25519 — même convention que
+    /// `agoravote_g1::signature::decode_hex`. Unique : un compte Ğ1 ne
+    /// peut être lié qu'à un seul utilisateur AgoraVote (même logique
+    /// que la contrainte d'unicité d'email sur `Account`).
+    pub public_key_hex: String,
+
+    pub linked_at: DateTime<Utc>,
+}
+
+impl G1Link {
+    pub fn new(user_id: Id, public_key_hex: impl Into<String>) -> Self {
+        Self {
+            id: Id::new_v4(),
+            user_id,
+            public_key_hex: public_key_hex.into(),
+            linked_at: Utc::now(),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

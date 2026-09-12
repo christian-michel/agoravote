@@ -55,12 +55,12 @@ use agoravote_core::campaign::Campaign;
 use agoravote_core::form::Form;
 use agoravote_core::result::ResultSet;
 use agoravote_core::voting_method::VotingParams;
-use agoravote_core::{Account, Id, User};
+use agoravote_core::{Account, G1Link, Id, User};
 
 use crate::auth::{require_organizer, AuthUser, OptionalAuthUser};
 use crate::dto::{
     AuthResponse, CastBallotRequest, CreateCampaignRequest, CreateFormRequest, ErrorResponse,
-    LoginRequest, RegisterRequest, TallyRequest,
+    G1ChallengeResponse, G1VerifyRequest, LoginRequest, RegisterRequest, TallyRequest,
 };
 use crate::state::AppState;
 
@@ -84,6 +84,8 @@ pub fn build_router(state: AppState) -> Router {
         .route("/auth/login", post(login))
         .route("/auth/logout", post(logout))
         .route("/auth/me", get(me))
+        .route("/auth/g1/challenge", post(g1_challenge))
+        .route("/auth/g1/verify", post(g1_verify))
         .route("/campaigns", post(create_campaign))
         .route("/campaigns/:campaign_id", get(get_campaign))
         .route(
@@ -392,6 +394,163 @@ async fn logout(
         .map_err(internal_error)?;
 
     Ok(StatusCode::NO_CONTENT)
+}
+
+/// `POST /auth/g1/challenge` — première moitié du protocole de
+/// connexion Ğ1v2 optionnelle (addendum v0.3, cf.
+/// `docs/G1_INTEGRATION.md` §4). Public, sans corps de requête : ne
+/// fait que générer un défi frais, à signer côté client dans son
+/// portefeuille (Cesium², Ğecko...) — cf. `agoravote_g1::Challenge`
+/// pour le détail du mécanisme sans état côté serveur.
+async fn g1_challenge() -> Json<G1ChallengeResponse> {
+    Json(agoravote_g1::Challenge::generate().into())
+}
+
+/// `POST /auth/g1/verify` — seconde moitié du protocole : vérifie la
+/// signature reçue, puis retrouve ou provisionne le `User` associé à
+/// cette clé publique et émet une session — même mécanisme que
+/// `register`/`login` ci-dessus.
+///
+/// ## Ce qui est vérifié ici, et ce qui ne l'est PAS
+///
+/// Cette route prouve uniquement la **possession de la clé privée**
+/// correspondant à `public_key_hex` (signature sr25519 valide sur un
+/// défi frais). Elle ne vérifie PAS l'appartenance à la toile de
+/// confiance Ğ1 (`agoravote_g1::chain::check_membership`, feature
+/// `chain-query`) : cette vérification réseau contre un vrai nœud
+/// Ğ1v2 n'est pas câblée ici, faute de pouvoir la tester de bout en
+/// bout dans l'environnement de développement actuel — cf.
+/// `crates/agoravote-g1/README.md` et `docs/G1_INTEGRATION.md` §5.
+/// Ne JAMAIS présenter à l'utilisateur cette connexion comme une
+/// preuve de membre de la toile de confiance : ce sont deux garanties
+/// distinctes (cf. le frontend, qui doit refléter cette nuance).
+async fn g1_verify(
+    State(state): State<AppState>,
+    Json(req): Json<G1VerifyRequest>,
+) -> Result<Json<AuthResponse>, (StatusCode, Json<ErrorResponse>)> {
+    // Le défi porte lui-même son horodatage d'expiration (cf. doc de
+    // `Challenge::verify_freshness`) : pas besoin que le serveur l'ait
+    // mémorisé entre l'émission et cette vérification.
+    agoravote_g1::Challenge::verify_freshness(&req.message, chrono::Utc::now())
+        .map_err(|_| bad_request("défi Ğ1 expiré ou invalide, redemandez-en un nouveau"))?;
+
+    let public_key_bytes = agoravote_g1::signature::decode_hex(&req.public_key_hex)
+        .map_err(|_| bad_request("clé publique Ğ1 invalide"))?;
+    let signature_bytes = agoravote_g1::signature::decode_hex(&req.signature_hex)
+        .map_err(|_| bad_request("signature Ğ1 invalide"))?;
+
+    // `verify_signature` distingue une entrée malformée (`Err`, ex :
+    // mauvaise longueur) d'une signature simplement invalide
+    // (`Ok(false)`, ex : mauvaise clé ou tentative d'usurpation) — cf.
+    // sa doc. Les deux cas se traduisent ici par un refus, mais avec
+    // un log différent (400 vs 401) pour l'observabilité.
+    let signature_valid =
+        agoravote_g1::verify_signature(&public_key_bytes, req.message.as_bytes(), &signature_bytes)
+            .map_err(|_| bad_request("format de clé ou de signature Ğ1 invalide"))?;
+    if !signature_valid {
+        return Err(unauthorized_g1());
+    }
+
+    // Ré-encode la clé publique à partir des octets vérifiés (plutôt
+    // que de réutiliser `req.public_key_hex` telle quelle) pour que la
+    // valeur stockée/recherchée soit toujours sous une forme canonique
+    // (minuscules, sans préfixe `0x`), quelle que soit la façon dont le
+    // client l'a formatée — sans quoi la même clé pourrait être
+    // enregistrée deux fois sous deux casses différentes.
+    let public_key_hex = encode_hex(&public_key_bytes);
+
+    let user = match state
+        .store
+        .get_g1_link_by_public_key(&public_key_hex)
+        .await
+        .map_err(internal_error)?
+    {
+        Some(link) => state
+            .store
+            .get_user(link.user_id)
+            .await
+            .map_err(internal_error)?
+            .ok_or_else(|| {
+                tracing::error!(
+                    user_id = %link.user_id,
+                    "lien Ğ1 trouvé mais utilisateur associé introuvable (incohérence de données)"
+                );
+                internal_error_from_message("erreur interne lors de la connexion")
+            })?,
+        None => {
+            // Première preuve de possession réussie pour cette clé :
+            // provisionne un nouveau `User` (rôle `Voter` par défaut,
+            // cf. `User::new`) dans l'organisation indiquée par le
+            // client, et le lie à cette clé publique. Cf. doc de
+            // `G1VerifyRequest` : jamais de `voter_id` fourni par le
+            // client accepté tel quel — cette identité découle
+            // uniquement de la preuve cryptographique vérifiée
+            // ci-dessus.
+            let display_name = format!("Participant Ğ1 {}", &public_key_hex[..8]);
+            let user = User::new(req.organization_id, display_name);
+            state
+                .store
+                .insert_user(user.clone())
+                .await
+                .map_err(internal_error)?;
+
+            let link = G1Link::new(user.id, public_key_hex.clone());
+            state
+                .store
+                .insert_g1_link(link)
+                .await
+                .map_err(|e| match e {
+                    // Fenêtre de course entre la lecture ci-dessus et
+                    // cette insertion : deux vérifications concurrentes
+                    // pour la même clé, toutes deux signature valide.
+                    // La contrainte `UNIQUE` en base tranche ; le
+                    // perdant reçoit un 401 plutôt qu'un 500, ce n'est
+                    // pas une panne (cf. `unauthorized_g1`).
+                    agoravote_store::StoreError::G1PublicKeyAlreadyLinked => unauthorized_g1(),
+                    other => internal_error(other),
+                })?;
+
+            user
+        }
+    };
+
+    let (token, session) = agoravote_auth::issue_session(user.id, user.organization_id);
+    state
+        .store
+        .insert_session(session)
+        .await
+        .map_err(internal_error)?;
+
+    Ok(Json(AuthResponse { token, user }))
+}
+
+/// Encode des octets en hexadécimal minuscule — même motif que
+/// `agoravote_auth::session::generate_token` (pas de dépendance
+/// supplémentaire pour un besoin aussi simple).
+fn encode_hex(bytes: &[u8]) -> String {
+    use std::fmt::Write;
+    bytes
+        .iter()
+        .fold(String::with_capacity(bytes.len() * 2), |mut acc, b| {
+            let _ = write!(acc, "{b:02x}");
+            acc
+        })
+}
+
+/// Construit une réponse `401` pour un échec de vérification Ğ1 **et**
+/// journalise l'événement — même logique que [`unauthorized_login`],
+/// voir sa documentation. Message volontairement générique : ne pas
+/// distinguer "signature invalide" de "clé déjà liée à un autre
+/// compte" évite de confirmer à un attaquant qu'une clé publique
+/// donnée est déjà enregistrée sur la plateforme.
+fn unauthorized_g1() -> (StatusCode, Json<ErrorResponse>) {
+    tracing::warn!(statut = 401, "connexion Ğ1 refusée");
+    (
+        StatusCode::UNAUTHORIZED,
+        Json(ErrorResponse::new(
+            "preuve de possession de clé Ğ1 invalide",
+        )),
+    )
 }
 
 async fn create_campaign(
@@ -1225,5 +1384,136 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    // --- Identité Ğ1v2 optionnelle (addendum v0.3) ---
+    //
+    // Ces tests signent réellement un défi avec le compte de dev
+    // Substrate standard "//Alice" (cf. commentaire du dev-dependency
+    // `subxt-signer` dans Cargo.toml) : de vraies signatures sr25519,
+    // pas des mocks — même exigence que le reste du projet (cf.
+    // CLAUDE.md).
+
+    /// Récupère un défi frais auprès de l'API, le signe avec le compte
+    /// de dev "//Alice", et renvoie de quoi appeler `/auth/g1/verify`.
+    async fn get_challenge_and_sign(router: &Router) -> (String, String, String) {
+        let (status, body) =
+            post_json(router, "/auth/g1/challenge", serde_json::Value::Null, None).await;
+        assert_eq!(status, StatusCode::OK);
+        let message = body["message"].as_str().unwrap().to_string();
+
+        let alice = subxt_signer::sr25519::dev::alice();
+        let signature = alice.sign(message.as_bytes());
+
+        (
+            message,
+            super::encode_hex(&alice.public_key().0),
+            super::encode_hex(&signature.0),
+        )
+    }
+
+    #[tokio::test]
+    async fn g1_challenge_renvoie_un_defi_avec_expiration_future() {
+        let router = test_router();
+        let (status, body) =
+            post_json(&router, "/auth/g1/challenge", serde_json::Value::Null, None).await;
+        assert_eq!(status, StatusCode::OK);
+        assert!(body["message"].as_str().unwrap().contains("AgoraVote"));
+        assert!(body["expires_at"].is_string());
+    }
+
+    #[tokio::test]
+    async fn connexion_g1_avec_signature_valide_provisionne_un_utilisateur() {
+        let router = test_router();
+        let organization_id = Id::new_v4();
+        let (message, public_key_hex, signature_hex) = get_challenge_and_sign(&router).await;
+
+        let (status, body) = post_json(
+            &router,
+            "/auth/g1/verify",
+            serde_json::json!({
+                "organization_id": organization_id,
+                "public_key_hex": public_key_hex,
+                "signature_hex": signature_hex,
+                "message": message,
+            }),
+            None,
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        assert!(body["token"].as_str().is_some());
+        let user_id = body["user"]["id"].as_str().unwrap().to_string();
+
+        // Une seconde connexion avec la MÊME clé (nouveau défi, nouvelle
+        // signature) doit retrouver le même utilisateur, pas en
+        // provisionner un second.
+        let (message2, public_key_hex2, signature_hex2) = get_challenge_and_sign(&router).await;
+        assert_eq!(public_key_hex, public_key_hex2);
+        let (status, body) = post_json(
+            &router,
+            "/auth/g1/verify",
+            serde_json::json!({
+                "organization_id": Id::new_v4(),
+                "public_key_hex": public_key_hex2,
+                "signature_hex": signature_hex2,
+                "message": message2,
+            }),
+            None,
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(body["user"]["id"].as_str().unwrap(), user_id);
+    }
+
+    #[tokio::test]
+    async fn connexion_g1_avec_signature_invalide_est_refusee() {
+        let router = test_router();
+        let (message, public_key_hex, _) = get_challenge_and_sign(&router).await;
+
+        // Une signature qui ne correspond pas au message (ici : celle
+        // d'un tout autre message) doit être refusée avec un 401, pas
+        // acceptée ni provoquer d'erreur serveur.
+        let bob = subxt_signer::sr25519::dev::bob();
+        let mauvaise_signature = bob.sign(b"un autre message");
+
+        let (status, _) = post_json(
+            &router,
+            "/auth/g1/verify",
+            serde_json::json!({
+                "organization_id": Id::new_v4(),
+                "public_key_hex": public_key_hex,
+                "signature_hex": super::encode_hex(&mauvaise_signature.0),
+                "message": message,
+            }),
+            None,
+        )
+        .await;
+        assert_eq!(status, StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn connexion_g1_avec_defi_falsifie_est_refusee() {
+        let router = test_router();
+        // Un message qui n'a jamais été émis par `/auth/g1/challenge`
+        // (donc jamais mémorisé nulle part, cf. protocole sans état) :
+        // `verify_freshness` doit le rejeter avant même de vérifier la
+        // signature.
+        let message = "message jamais emis par le serveur, sans marqueur EXP".to_string();
+        let alice = subxt_signer::sr25519::dev::alice();
+        let signature = alice.sign(message.as_bytes());
+
+        let (status, _) = post_json(
+            &router,
+            "/auth/g1/verify",
+            serde_json::json!({
+                "organization_id": Id::new_v4(),
+                "public_key_hex": super::encode_hex(&alice.public_key().0),
+                "signature_hex": super::encode_hex(&signature.0),
+                "message": message,
+            }),
+            None,
+        )
+        .await;
+        assert_eq!(status, StatusCode::BAD_REQUEST);
     }
 }

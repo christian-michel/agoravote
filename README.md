@@ -9,9 +9,12 @@
 > (`docs/openapi.yaml`), et un **frontend React** (`frontend/`) qui la
 > consomme. Voir [« Ce qui n'est pas fait »](#ce-qui-nest-pas-encore-fait)
 > pour les limites connues de chaque partie.
-> Un module d'identité décentralisée optionnel (Ğ1v2) existe en dehors
-> du workspace principal, à l'état expérimental non vérifié — voir
-> [`docs/G1_INTEGRATION.md`](docs/G1_INTEGRATION.md).
+> Une identité décentralisée optionnelle (Ğ1v2, addendum v0.3) est
+> câblée de bout en bout (`POST /auth/g1/challenge`/`verify`, écran
+> `/connexion-g1`) : elle ne prouve que la possession de clé, pas
+> l'appartenance à la toile de confiance — voir
+> [`docs/G1_INTEGRATION.md`](docs/G1_INTEGRATION.md) et
+> [`docs/SECURITY.md`](docs/SECURITY.md) §8.
 
 **Vous reprenez ce projet ?** Lisez [`CLAUDE.md`](CLAUDE.md) (contexte
 et conventions, pensé pour un agent de code mais utile à toute
@@ -249,16 +252,16 @@ bloqueraient probablement une mise en production :
    majoritaire — §15.1) : hors MVP, pas commencées.
 8. **Modules WASM** (§6.1) : seul le chargement natif existe.
 9. **Module d'identité Ğ1/Duniter** (`crates/agoravote-g1`) : vision
-   posée dans l'addendum v0.3. Compilé et testé depuis l'itération 6
-   (cf. `docs/DEVLOG.md`) pour la preuve de possession de clé
-   (`challenge`/`signature`, 9 tests verts) ; la partie requête à la
-   chaîne (`chain.rs`) compile mais reste **non vérifiée à
-   l'exécution**, faute d'accès réseau à l'infrastructure Duniter dans
-   tout environnement de développement utilisé jusqu'ici. Volontairement
-   exclu du workspace principal pour ne pas réintégrer un module dont
-   les noms de stockage restent des hypothèses non confirmées (cf.
-   `crates/agoravote-g1/README.md` et `docs/G1_INTEGRATION.md` pour le
-   détail complet et la marche à suivre).
+   posée dans l'addendum v0.3. Câblé de bout en bout depuis l'itération
+   8 (`POST /auth/g1/challenge`/`verify`, écran `/connexion-g1`) pour
+   la preuve de possession de clé (signature sr25519 réelle, jamais la
+   phrase de 12 mots) — cf. `docs/DEVLOG.md`. La partie requête à la
+   chaîne (`chain.rs`, vérification d'appartenance à la toile de
+   confiance) compile mais reste **non vérifiée à l'exécution ni
+   câblée à aucune route**, faute d'accès réseau à l'infrastructure
+   Duniter dans tout environnement de développement utilisé jusqu'ici
+   (cf. `crates/agoravote-g1/README.md`, `docs/G1_INTEGRATION.md` et
+   `docs/SECURITY.md` §8 pour le détail complet et la marche à suivre).
 
 ## Licence
 

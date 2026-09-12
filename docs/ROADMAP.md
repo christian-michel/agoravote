@@ -98,16 +98,30 @@ coché — l'historique de ce qui a été priorisé et quand a de la valeur.
 
 Cf. `docs/G1_INTEGRATION.md` pour le détail complet de chaque étape.
 
-- [ ] Compiler `agoravote-g1` (cf. "Priorité immédiate" ci-dessus).
+- [x] Compiler `agoravote-g1` (cf. "Priorité immédiate" ci-dessus).
 - [ ] Confirmer les noms de stockage réels (`Identity::IdentityIndexOf`,
-      existence/nom d'un pallet `Membership` séparé).
-- [ ] Implémenter le sketch d'intégration `agoravote-api` décrit dans
+      existence/nom d'un pallet `Membership` séparé) — préalable à
+      câbler `chain-query` (vérification d'appartenance à la toile de
+      confiance), toujours bloqué faute d'accès réseau à
+      l'infrastructure Duniter dans tout environnement de développement
+      utilisé jusqu'ici (reconfirmé en itération 8).
+- [x] Implémenter le sketch d'intégration `agoravote-api` décrit dans
       `docs/G1_INTEGRATION.md` §4 (`POST /auth/g1/challenge`,
-      `POST /auth/g1/verify`).
-- [ ] Documenter dans `docs/SECURITY.md` les implications d'un nœud
-      RPC potentiellement malveillant (envisager l'interrogation de
-      plusieurs nœuds indépendants pour une décision de légitimité de
-      vote).
+      `POST /auth/g1/verify`) et l'écran frontend `/connexion-g1`
+      (planche 17 de l'addendum). Fait — cf. `docs/DEVLOG.md`
+      itération 8. Ne prouve que la possession de clé, pas
+      l'appartenance à la toile de confiance (cf. item précédent).
+- [x] Documenter dans `docs/SECURITY.md` les implications d'un nœud
+      RPC potentiellement malveillant. Fait — cf. `docs/SECURITY.md`
+      §7 et `docs/DEVLOG.md` itération 8 (documenté par anticipation :
+      `chain-query` n'est pas encore câblé, cf. item ci-dessus).
+- [ ] Intégration d'une extension de portefeuille Ğ1 (Cesium²,
+      Ğecko...) pour éviter le copier-coller manuel du défi/signature
+      de l'écran `/connexion-g1` actuel — cf. `docs/DEVLOG.md`
+      itération 8.
+- [ ] Bascule d'activation de l'identité Ğ1 par organisation (écran
+      "Paramètres" de la nav latérale, actuellement grisé) — aucune
+      organisation ne peut aujourd'hui désactiver cette connexion.
 
 ## Sécurité et robustesse
 

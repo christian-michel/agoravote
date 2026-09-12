@@ -267,6 +267,106 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/g1/challenge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Génère un défi à signer pour la connexion par identité Ğ1v2 optionnelle
+         * @description Première moitié du protocole de connexion Ğ1 (addendum v0.3, « Identité décentralisée ») — cf. docs/G1_INTEGRATION.md §4. Le défi renvoyé doit être signé localement, dans le portefeuille Ğ1 de l'utilisateur (Cesium², Ğecko...), sans que la phrase de 12 mots ne quitte jamais son appareil. Sans corps de requête. Prouve uniquement la possession de clé, PAS l'appartenance à la toile de confiance (cf. réponse 200 de /auth/g1/verify).
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Défi frais, valide 5 minutes */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["G1ChallengeResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/g1/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Vérifie la signature du défi et ouvre une session (identité Ğ1v2 optionnelle)
+         * @description Seconde moitié du protocole. Retrouve l'utilisateur déjà lié à cette clé publique, ou en provisionne un nouveau (rôle Voter, dans `organization_id`) lors de la toute première preuve réussie pour cette clé — cf. docs/G1_INTEGRATION.md §4. Ne vérifie QUE la possession de la clé privée (signature sr25519 valide), jamais l'appartenance à la toile de confiance Ğ1 (vérification réseau non câblée dans ce déploiement, cf. crates/agoravote-g1/README.md).
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["G1VerifyRequest"];
+                };
+            };
+            responses: {
+                /** @description Signature valide, session ouverte */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AuthResponse"];
+                    };
+                };
+                /** @description Défi expiré/invalide, ou clé publique/signature mal formées */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Signature invalide pour la clé publique et le défi fournis (message volontairement générique, cf. docs/SECURITY.md §7) */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/campaigns": {
         parameters: {
             query?: never;
@@ -721,6 +821,25 @@ export interface components {
             display_name: string;
             preferred_language?: string | null;
             roles: ("Admin" | "Organizer" | "Voter" | "Auditor")[];
+        };
+        G1ChallengeResponse: {
+            /** @description Texte exact à signer dans le portefeuille Ğ1 — à renvoyer tel quel à /auth/g1/verify */
+            message: string;
+            /** Format: date-time */
+            expires_at: string;
+        };
+        G1VerifyRequest: {
+            /**
+             * Format: uuid
+             * @description Organisation du nouvel utilisateur si cette clé publique n'est pas encore liée à un compte ; ignoré sinon
+             */
+            organization_id: string;
+            /** @description Clé publique sr25519, 32 octets encodés en hexadécimal (avec ou sans préfixe 0x) */
+            public_key_hex: string;
+            /** @description Signature sr25519 de `message`, 64 octets encodés en hexadécimal */
+            signature_hex: string;
+            /** @description Exactement le `message` renvoyé par /auth/g1/challenge */
+            message: string;
         };
         CreateCampaignRequest: {
             /** Format: uuid */

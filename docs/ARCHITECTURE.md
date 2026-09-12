@@ -128,7 +128,8 @@ pour permettre une révocation immédiate).
 | `postgres.rs` | `PgStore` — backend PostgreSQL réel (`sqlx`), transactions avec verrou de ligne pour les mises à jour |
 | `migrations/0001_init.sql` | Schéma SQL (JSONB) : campagnes, formulaires, bulletins, résultats |
 | `migrations/0002_auth.sql` | Schéma SQL (§13) : utilisateurs, comptes (email unique), sessions (clé = empreinte du jeton) |
-| `tests/postgres_integration.rs` | 6 tests `#[ignore]` exécutés contre un vrai PostgreSQL (voir l'en-tête du fichier pour la commande) |
+| `migrations/0003_g1_link.sql` | Schéma SQL (addendum v0.3) : liens `User` ↔ clé publique Ğ1 (`public_key_hex` unique) — cf. section `agoravote-g1` ci-dessous |
+| `tests/postgres_integration.rs` | 10 tests `#[ignore]` exécutés contre un vrai PostgreSQL (voir l'en-tête du fichier pour la commande) |
 
 **Pourquoi un `enum` plutôt qu'un trait `dyn Store` ?** Rust 1.75 (la
 toolchain utilisée pour développer ce crate, cf. `Cargo.toml` racine)
@@ -155,24 +156,28 @@ plutôt qu'un repli silencieux.
 
 ## `agoravote-g1` — addendum v0.3 (§ Identité décentralisée)
 
-**Hors du workspace principal** — cf. `crates/agoravote-g1/README.md`
-et `docs/G1_INTEGRATION.md` pour l'explication complète et le statut
-détaillé. Résumé : module optionnel de preuve de possession de compte
-Ğ1v2 (signature sr25519) et de vérification d'adhésion à la toile de
-confiance (requête à la chaîne Duniter v2). Son arbre de dépendances
-cryptographiques compile désormais avec une toolchain Rust à jour
-(rustc 1.94, cf. `docs/DEVLOG.md` itération 6) mais reste exclu du
-workspace principal : la partie réseau (`chain.rs`) n'a pas pu être
-vérifiée contre un vrai nœud Ğ1v2 (accès bloqué dans tous les
-environnements de développement utilisés jusqu'ici) — il vit donc
-toujours dans son propre mini-workspace, avec son propre
-`Cargo.lock`, en attendant cette confirmation.
+**Membre du workspace principal depuis l'itération 8** (cf.
+`docs/DEVLOG.md`) — sa toolchain compile désormais dans le même
+`cargo build --workspace` que le reste du projet, ce qui a permis à
+`agoravote-api` d'en dépendre par chemin (Cargo refuse qu'un membre de
+workspace dépende d'un crate qui déclare son propre workspace séparé).
+Module optionnel de preuve de possession de compte Ğ1v2 (signature
+sr25519) et de vérification d'adhésion à la toile de confiance (requête
+à la chaîne Duniter v2) — cf. `crates/agoravote-g1/README.md` et
+`docs/G1_INTEGRATION.md` pour le détail complet.
 
 | Fichier | Statut |
 |---|---|
-| `challenge.rs` | Compilé et testé (3 tests verts) — génération de défi, pur, sans dépendance réseau |
-| `signature.rs` | Compilé et testé (6 tests verts, dont un vecteur sr25519 connu `//Alice`) — feature `signature-verification`, désactivée par défaut, désormais vérifiable avec rustc 1.94+ |
-| `chain.rs` | Compilé (feature `chain-query`) mais non vérifié à l'exécution — réseau Duniter/Ğ1 toujours bloqué dans cet environnement, noms de stockage non confirmés |
+| `challenge.rs` | Compilé et testé (7 tests verts) — génération de défi et `verify_freshness` (fraîcheur vérifiable sans état serveur, horodatage embarqué dans le texte signé), pur, sans dépendance réseau |
+| `signature.rs` | Compilé et testé (6 tests verts, dont un vecteur sr25519 connu `//Alice`) — feature `signature-verification`, activée par `agoravote-api` (cf. son `Cargo.toml`) |
+| `chain.rs` | Compilé (feature `chain-query`) mais non vérifié à l'exécution — réseau Duniter/Ğ1 toujours bloqué dans cet environnement, noms de stockage non confirmés. **Non activée par `agoravote-api`** : `/auth/g1/verify` ne prouve donc que la possession de clé, jamais l'appartenance à la toile de confiance — cf. `docs/SECURITY.md` §8. |
+
+**Câblage HTTP** (itération 8) : `POST /auth/g1/challenge` et
+`POST /auth/g1/verify` dans `agoravote-api/src/routes.rs` (cf. table de
+la section `agoravote-api` ci-dessus et `docs/openapi.yaml` pour le
+contrat complet), persistance via `G1Link` (`agoravote-core::auth`) et
+`Store::insert_g1_link`/`get_g1_link_by_public_key` (`agoravote-store`,
+même patron que `Account`/`get_account_by_email`).
 
 ## Frontend — `frontend/`
 
@@ -193,7 +198,7 @@ compilation TypeScript plutôt qu'en bug silencieux à l'exécution.
 | `src/components/icons.tsx` | Icônes trait dessinées à la main (pas de dépendance externe) |
 | `src/components/FormBuilder.tsx` | Bibliothèque de questions (six types déjà acceptés par l'API) + canevas |
 | `src/components/` (autres) | UI de base (`ui.tsx`), panneau de dépouillement (`TallyPanel.tsx`) |
-| `src/pages/` | Un fichier par écran (cf. `frontend/README.md` pour la table complète) — inclut depuis l'itération 7 `CampaignsList.tsx`, `ModulesPage.tsx` et `Analysis.tsx` |
+| `src/pages/` | Un fichier par écran (cf. `frontend/README.md` pour la table complète) — inclut depuis l'itération 7 `CampaignsList.tsx`, `ModulesPage.tsx` et `Analysis.tsx`, et depuis l'itération 8 `G1Login.tsx` (planche 17 de l'addendum, `/connexion-g1`) |
 | `src/lib/methodCopy.ts` | Libellés/descriptions éditoriales des méthodes de vote natives, partagés entre `ModulesPage` et `TallyPanel` |
 | `DESIGN.md` | Direction visuelle et sa justification |
 

@@ -16,6 +16,17 @@ agoravote-voting = { path = "../agoravote-voting" }
 agoravote-stats = { path = "../agoravote-stats" }
 agoravote-store = { path = "../agoravote-store" }
 agoravote-auth = { path = "../agoravote-auth" }
+# Identité Ğ1v2 optionnelle (addendum v0.3), câblée sur
+# `POST /auth/g1/challenge`/`POST /auth/g1/verify` en itération 8 (cf.
+# `docs/G1_INTEGRATION.md` §4 et `routes.rs::g1_verify`). Uniquement la
+# feature `signature-verification` (preuve de possession de clé) — PAS
+# `chain-query` (vérification d'appartenance à la toile de confiance),
+# qui reste non vérifiable dans cet environnement (accès réseau
+# Duniter bloqué) et n'est donc câblée à aucune route ici.
+# `agoravote-g1` a rejoint le workspace principal en itération 8 (cf.
+# Cargo.toml racine) : cette dépendance de chemin partage désormais le
+# même `Cargo.lock` que le reste du projet.
+agoravote-g1 = { path = "../agoravote-g1", features = ["signature-verification"] }
 serde.workspace = true
 serde_json.workspace = true
 uuid.workspace = true
@@ -32,3 +43,13 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }
+# Pour signer réellement un défi Ğ1 dans les tests de `routes.rs`
+# (compte de dev Substrate standard "//Alice", jamais un vrai compte
+# Ğ1 — même vecteur que `agoravote-g1/src/signature.rs`) : ces tests
+# exercent `g1_verify` de bout en bout avec une vraie signature
+# sr25519, pas un mock — cf. CLAUDE.md, "tests d'intégration réels".
+# Même version que `agoravote-g1` (déjà résolue dans le `Cargo.lock`
+# du workspace, cf. ce crate) : `default-features = false` + les mêmes
+# features minimales, pas besoin du client réseau `subxt` complet ici
+# non plus.
+subxt-signer = { version = "0.37", default-features = false, features = ["sr25519", "subxt", "std"] }

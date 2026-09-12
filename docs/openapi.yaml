@@ -153,6 +153,67 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /auth/g1/challenge:
+    post:
+      tags: [auth]
+      summary: Génère un défi à signer pour la connexion par identité Ğ1v2 optionnelle
+      description: >
+        Première moitié du protocole de connexion Ğ1 (addendum v0.3,
+        « Identité décentralisée ») — cf. docs/G1_INTEGRATION.md §4.
+        Le défi renvoyé doit être signé localement, dans le portefeuille
+        Ğ1 de l'utilisateur (Cesium², Ğecko...), sans que la phrase de
+        12 mots ne quitte jamais son appareil. Sans corps de requête.
+        Prouve uniquement la possession de clé, PAS l'appartenance à la
+        toile de confiance (cf. réponse 200 de /auth/g1/verify).
+      security: []
+      responses:
+        "200":
+          description: Défi frais, valide 5 minutes
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/G1ChallengeResponse"
+
+  /auth/g1/verify:
+    post:
+      tags: [auth]
+      summary: Vérifie la signature du défi et ouvre une session (identité Ğ1v2 optionnelle)
+      description: >
+        Seconde moitié du protocole. Retrouve l'utilisateur déjà lié à
+        cette clé publique, ou en provisionne un nouveau (rôle Voter,
+        dans `organization_id`) lors de la toute première preuve
+        réussie pour cette clé — cf. docs/G1_INTEGRATION.md §4. Ne
+        vérifie QUE la possession de la clé privée (signature sr25519
+        valide), jamais l'appartenance à la toile de confiance Ğ1
+        (vérification réseau non câblée dans ce déploiement, cf.
+        crates/agoravote-g1/README.md).
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/G1VerifyRequest"
+      responses:
+        "200":
+          description: Signature valide, session ouverte
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          description: Défi expiré/invalide, ou clé publique/signature mal formées
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Signature invalide pour la clé publique et le défi fournis (message volontairement générique, cf. docs/SECURITY.md §7)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /campaigns:
     post:
       tags: [campaigns]
@@ -487,6 +548,35 @@ components:
           items:
             type: string
             enum: [Admin, Organizer, Voter, Auditor]
+
+    G1ChallengeResponse:
+      type: object
+      required: [message, expires_at]
+      properties:
+        message:
+          type: string
+          description: Texte exact à signer dans le portefeuille Ğ1 — à renvoyer tel quel à /auth/g1/verify
+        expires_at:
+          type: string
+          format: date-time
+
+    G1VerifyRequest:
+      type: object
+      required: [organization_id, public_key_hex, signature_hex, message]
+      properties:
+        organization_id:
+          type: string
+          format: uuid
+          description: Organisation du nouvel utilisateur si cette clé publique n'est pas encore liée à un compte ; ignoré sinon
+        public_key_hex:
+          type: string
+          description: Clé publique sr25519, 32 octets encodés en hexadécimal (avec ou sans préfixe 0x)
+        signature_hex:
+          type: string
+          description: Signature sr25519 de `message`, 64 octets encodés en hexadécimal
+        message:
+          type: string
+          description: Exactement le `message` renvoyé par /auth/g1/challenge
 
     CreateCampaignRequest:
       type: object

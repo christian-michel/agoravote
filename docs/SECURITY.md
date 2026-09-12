@@ -182,3 +182,68 @@ cf. `docs/ARCHITECTURE.md`) a été vérifiée contre une vraie base :
   SQL (backend PostgreSQL) et la vérification équivalente du backend
   mémoire ferment cette fenêtre — testé explicitement contre une vraie
   base (`compte_survit_a_un_aller_retour_et_email_est_unique`).
+
+## 8. Identité Ğ1v2 optionnelle (addendum v0.3) — choix faits et limite connue
+
+Cf. `docs/G1_INTEGRATION.md` et `docs/DEVLOG.md` itération 8 pour le
+détail de l'implémentation (`POST /auth/g1/challenge`,
+`POST /auth/g1/verify`).
+
+- **La phrase de 12 mots (ou toute clé privée) ne transite jamais vers
+  AgoraVote.** Le protocole défi/signature (`agoravote-g1::challenge`,
+  `signature`) ne reçoit et ne manipule que des clés publiques et des
+  signatures, produites localement par le portefeuille de
+  l'utilisateur — cf. la doc de `agoravote_g1::signature`, qui répète
+  cette invariante.
+- **Défi à usage unique, avec fenêtre de validité courte (5 minutes)
+  vérifiée sans état serveur.** L'horodatage d'expiration est embarqué
+  dans le texte du défi lui-même (marqueur `EXP:<epoch>`), donc couvert
+  par la signature qu'il produit : un client ne peut pas prolonger la
+  validité d'un défi capturé en falsifiant cet horodatage, puisque la
+  falsification romprait la correspondance avec la signature déjà
+  produite sur le texte d'origine (cf. le test
+  `verify_freshness_refuse_un_horodatage_falsifie_a_lavenir` dans
+  `crates/agoravote-g1/src/challenge.rs`, qui documente explicitement
+  cet invariant). `Challenge::verify_freshness` n'est JAMAIS appelée
+  seule côté serveur : toujours en plus de `verify_signature` sur le
+  message réellement reçu, jamais à sa place.
+- **Message d'erreur générique** (`unauthorized_g1`, même principe que
+  `unauthorized_login` ci-dessus) : signature invalide et clé déjà
+  liée à un autre compte renvoient la même réponse, pour ne pas
+  confirmer à un attaquant qu'une clé publique donnée est déjà
+  enregistrée sur la plateforme.
+- **Ce que cette connexion NE prouve PAS : l'appartenance à la toile de
+  confiance Ğ1.** `agoravote-g1` expose une fonctionnalité séparée,
+  `chain::check_membership` (feature `chain-query`), qui interrogerait
+  un nœud Ğ1v2 réel pour vérifier qu'un compte est membre actif de la
+  toile de confiance — **volontairement non câblée à aucune route de
+  ce déploiement**. Deux raisons distinctes, à ne jamais confondre :
+  1. **Raison actuelle (limite d'environnement)** : cette vérification
+     réseau n'a jamais pu être testée de bout en bout contre un vrai
+     nœud `gdev`, l'accès à l'infrastructure Duniter restant bloqué
+     dans tous les environnements de développement utilisés jusqu'ici
+     (reconfirmé en itération 8) — cf. la règle non négociable de ce
+     projet, jamais de code non testé présenté comme fonctionnel.
+  2. **Raison durable, même une fois `chain.rs` vérifié** : un nœud RPC
+     interrogé pour cette vérification est un tiers de confiance à part
+     entière. Un nœud malveillant ou compromis pourrait répondre
+     "membre actif" pour un compte qui ne l'est pas (ou l'inverse),
+     sans qu'AgoraVote puisse le détecter avec une seule source — cf.
+     l'item de `docs/ROADMAP.md` proposant l'interrogation de
+     plusieurs nœuds indépendants avant toute décision de légitimité
+     de vote qui s'appuierait sur ce résultat. Tant que ce câblage
+     n'existe pas, ce risque reste théorique mais doit être traité
+     avant toute mise en production s'appuyant sur la toile de
+     confiance comme critère d'éligibilité.
+  L'API (`routes.rs::g1_verify`) et l'écran frontend `/connexion-g1`
+  le disent explicitement à l'utilisateur : cette connexion prouve la
+  possession de clé, pas l'appartenance à la toile de confiance.
+- **Auto-provisionnement de compte** : la toute première vérification
+  réussie pour une clé publique Ğ1 inconnue crée un nouveau `User`
+  (rôle `Voter`) sans aucune autre preuve d'identité que la signature
+  cryptographique — cohérent avec `/auth/register`, qui ne demande lui
+  non plus qu'une adresse email valide. Ce n'est pas une garantie
+  d'unicité humaine (rien n'empêche une personne de générer plusieurs
+  comptes Ğ1) : seule une vérification de toile de confiance
+  (non câblée, cf. ci-dessus) offrirait une garantie plus forte sur ce
+  point.

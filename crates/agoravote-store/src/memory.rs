@@ -10,7 +10,7 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use agoravote_core::{Account, Ballot, Campaign, Form, Id, ResultSet, Session, User};
+use agoravote_core::{Account, Ballot, Campaign, Form, G1Link, Id, ResultSet, Session, User};
 
 use crate::StoreError;
 
@@ -28,6 +28,7 @@ struct Inner {
     users: HashMap<Id, User>,
     accounts_by_email: HashMap<String, Account>,
     sessions_by_token_hash: HashMap<String, Session>,
+    g1_links_by_public_key: HashMap<String, G1Link>,
 }
 
 /// Verrouille le `Mutex` en récupérant les données même s'il a été
@@ -191,6 +192,36 @@ impl MemoryStore {
             .sessions_by_token_hash
             .remove(token_hash);
         Ok(())
+    }
+
+    // --- Identité Ğ1v2 optionnelle (addendum v0.3) ---
+
+    pub async fn insert_g1_link(&self, link: G1Link) -> Result<(), StoreError> {
+        let mut inner = lock_recover(&self.inner);
+        // Même raisonnement que `insert_account` ci-dessus : reproduit
+        // la contrainte `UNIQUE` du backend PostgreSQL (cf. migration
+        // `0003_g1_link.sql`) pour un comportement identique entre les
+        // deux backends.
+        if inner
+            .g1_links_by_public_key
+            .contains_key(&link.public_key_hex)
+        {
+            return Err(StoreError::G1PublicKeyAlreadyLinked);
+        }
+        inner
+            .g1_links_by_public_key
+            .insert(link.public_key_hex.clone(), link);
+        Ok(())
+    }
+
+    pub async fn get_g1_link_by_public_key(
+        &self,
+        public_key_hex: &str,
+    ) -> Result<Option<G1Link>, StoreError> {
+        Ok(lock_recover(&self.inner)
+            .g1_links_by_public_key
+            .get(public_key_hex)
+            .cloned())
     }
 }
 

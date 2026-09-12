@@ -797,3 +797,158 @@ statistiques descriptives) est noté en limite connue ci-dessous et dans
 5. Migration `sqlx` 0.6 → 0.7/0.8 (cf. itération 6).
 6. Permissions fines, flux d'invitation d'organisateurs, journal
    d'audit (cf. itération 3).
+
+## Itération 8 — identité Ğ1v2 optionnelle câblée de bout en bout
+
+Objectif : le porteur de projet a demandé une analyse d'écart au
+cahier des charges, en insistant explicitement sur l'identité Ğ1v2
+optionnelle (addendum v0.3) — « attention à ne pas se tromper et à
+bien prendre la G1 v2 pas la première version de la June » — puis
+d'implémenter ce qui manquait. `agoravote-g1` existait déjà (itération
+4, exploratoire) et compilait depuis l'itération 6, mais n'était
+câblé à aucune route API ni à aucun écran : cette itération termine le
+protocole de bout en bout, backend et frontend, dans les limites
+honnêtes déjà documentées par ce crate.
+
+### Réintégration au workspace principal : nécessaire, pas cosmétique
+
+`agoravote-g1` avait sa propre section `[workspace]` (héritage de
+l'ancien environnement à toolchain figée, cf. itération 4/6). Pour que
+`agoravote-api` en dépende par chemin, Cargo refuse catégoriquement
+deux racines de workspace dans le même arbre de dépendances
+("multiple workspace roots found in the same workspace") — pas
+contournable par une astuce de configuration. Réintégration complète :
+suppression de sa section `[workspace]`, ajout à `members` du
+`Cargo.toml` racine, fusion de son `Cargo.lock` séparé dans celui du
+workspace. Revérifié entièrement après coup : `cargo build --workspace`,
+`cargo test --workspace`, `cargo fmt --check`, `cargo clippy --workspace
+--all-targets -- -D warnings`, tous verts — confirme que les épinglages
+de version documentés dans `crates/agoravote-g1/Cargo.toml` (posés en
+itération 6) tiennent bien dans le même arbre de résolution que le
+reste du projet.
+
+### `G1Link` : second moyen de connexion, jamais un remplacement d'`Account`
+
+Ajouté à `agoravote-core::auth` (cf. sa doc) : lie un `User` à une clé
+publique Ğ1 (hex, 32 octets), jamais à une clé privée ou une phrase de
+12 mots. Persisté via une nouvelle table `g1_links` (migration
+`0003_g1_link.sql`), `UNIQUE` sur `public_key_hex` — même discipline
+que `accounts.email` pour `Account`. `Store::insert_g1_link`/
+`get_g1_link_by_public_key` suivent exactement le même patron que les
+méthodes `*_account` déjà en place dans les deux backends (mémoire et
+PostgreSQL), y compris la vérification manuelle d'unicité côté mémoire
+pour reproduire la contrainte `UNIQUE` réelle. `StoreError::
+G1PublicKeyAlreadyLinked` généralise `map_unique_violation` (jusqu'ici
+câblé en dur sur `EmailAlreadyExists`) pour accepter l'erreur cible en
+paramètre.
+
+### Fraîcheur du défi sans état serveur
+
+`Challenge::verify_freshness` (nouveau, `agoravote-g1::challenge`) lit
+l'horodatage d'expiration directement dans le texte du défi reçu
+(marqueur `EXP:<epoch>`, déjà embarqué par `Challenge::generate` depuis
+cette itération) plutôt que d'exiger que le serveur ait mémorisé le
+défi émis entre temps — cohérent avec le choix déjà fait pour les
+sessions (jeton opaque, pas d'état supplémentaire à synchroniser entre
+plusieurs instances de l'API). Un test dédié
+(`verify_freshness_refuse_un_horodatage_falsifie_a_lavenir`) documente
+explicitement l'invariant qui rend ça sûr : falsifier `EXP:` dans le
+message reçu romprait la correspondance avec la signature déjà
+produite sur le message d'origine — `verify_freshness` seule ne suffit
+JAMAIS, elle doit toujours être appelée en plus de
+`verify_signature` sur le message réellement reçu, jamais à sa place
+(cf. `routes.rs::g1_verify`, qui respecte cet ordre).
+
+### `POST /auth/g1/challenge` et `POST /auth/g1/verify`
+
+Cf. `docs/openapi.yaml` pour le contrat complet. `g1_verify` retrouve
+le `User` déjà lié à la clé publique vérifiée, ou en provisionne un
+nouveau (rôle `Voter`, dans l'`organization_id` fourni par le client —
+ignoré si la clé est déjà liée) lors de la toute première preuve
+réussie pour cette clé, exactement comme `register`/`login` émettent
+une session ensuite. Erreurs à message volontairement générique
+(`unauthorized_g1`, même principe que `unauthorized_login` : ne jamais
+confirmer à un attaquant qu'une clé publique donnée est déjà
+enregistrée). Testé avec de VRAIES signatures sr25519 (compte de dev
+Substrate standard "//Alice", jamais un vrai compte Ğ1 — même vecteur
+que `signature.rs`), pas des mocks : `subxt-signer` ajouté en
+dev-dependency d'`agoravote-api` pour ces 4 tests (défi frais valide,
+provisionnement puis réutilisation du même utilisateur, signature
+invalide → 401, défi jamais émis par le serveur → 400).
+
+### Ce qui n'est délibérément PAS câblé : `chain-query`
+
+`agoravote-api` ne dépend que de la feature `signature-verification`
+d'`agoravote-g1`, jamais `chain-query` (vérification d'appartenance à
+la toile de confiance contre un nœud Ğ1v2 réel) : cette vérification
+réseau reste non testable de bout en bout dans tous les environnements
+de développement utilisés jusqu'ici (accès à l'infrastructure Duniter
+toujours bloqué, reconfirmé cette itération) — cf. la règle non
+négociable de ce projet, jamais de code non testé présenté comme
+fonctionnel. La route `/auth/g1/verify` et l'écran frontend le disent
+explicitement : cette connexion prouve la possession de clé, PAS
+l'appartenance à la toile de confiance — deux garanties distinctes, à
+ne jamais confondre dans l'UI ou la doc.
+
+### Écran frontend `/connexion-g1` (planche 17 de l'addendum)
+
+Aucune intégration d'extension de portefeuille (`window.g1` ou
+équivalent) : parcours manuel en deux étapes (générer un défi, coller
+la clé publique et la signature obtenues du portefeuille externe), 
+délibérément plus lourd qu'une future intégration native mais dont
+chaque étape est réellement vérifiée côté serveur. Lié depuis
+`Login.tsx`. `AuthContext` gagne `loginWithG1`, même forme que
+`login`/`register`.
+
+### Ce qui a été vérifié concrètement
+
+- `make check` (workspace Rust complet) vert, y compris les 4 nouveaux
+  tests `routes.rs` avec de vraies signatures sr25519.
+- Tests d'intégration PostgreSQL réels relancés
+  (`DATABASE_URL=... cargo test -p agoravote-store -- --ignored
+  --test-threads=1`) : 10/10 verts, y compris les 2 tests `G1Link`
+  ajoutés en itération précédente.
+- `docs/openapi.yaml` mis à jour (`/auth/g1/challenge`,
+  `/auth/g1/verify`, `G1ChallengeResponse`, `G1VerifyRequest`) puis
+  `npm run gen:api` — `npx tsc -b` et `npm run build` verts contre le
+  schéma régénéré.
+- Parcours complet rejoué dans un vrai Chromium : API (mémoire) et
+  frontend démarrés localement, `/connexion-g1` → génération d'un défi
+  réel → signature produite hors-bande avec le compte de dev "//Alice"
+  → collage clé publique/signature → vérification → redirection vers
+  `/admin` avec une session valide et l'utilisateur Ğ1 auto-provisionné
+  affiché ("Participant Ğ1 d43593c7…"). Captures d'écran prises à
+  chaque étape.
+
+### Ce qui reste non vérifié / non fait (honnêteté du statut)
+
+- **`chain-query`** : cf. ci-dessus — non câblé, non testable ici.
+- **Bascule par organisation** (écran "Paramètres — identité" activant/
+  désactivant Ğ1 par organisation) : pas de concept backend
+  d'identités optionnelles activables par organisation ; toute
+  organisation accepte aujourd'hui la connexion Ğ1 si le frontend y
+  mène. À revoir si le produit veut un jour cette granularité.
+- **Aucune intégration d'extension de portefeuille** : cf. ci-dessus,
+  parcours manuel volontairement assumé pour ce prototype.
+- **`docs/SECURITY.md`** : implications de confiance envers un nœud RPC
+  Ğ1v2 (pour `chain-query`, une fois câblé) documentées dans ce même
+  commit — cf. ce fichier, section dédiée.
+
+### Prochaines itérations candidates (mise à jour)
+
+1. Confirmer les noms de stockage de `chain.rs` (`agoravote-g1`) contre
+   un nœud `gdev` réel, depuis un environnement qui a accès à
+   l'infrastructure Duniter — puis câbler `chain-query` à
+   `/auth/g1/verify` (vérification optionnelle de toile de confiance
+   par campagne).
+2. `GET /campaigns` (liste) côté API, pour remplacer le palliatif de
+   mémorisation locale (tableau de bord ET écran Campagnes).
+3. Câbler `agoravote-stats` à une route API (statistiques descriptives
+   par question) pour enrichir l'écran Analyse sans donnée fictive.
+4. Permissions fines, flux d'invitation d'organisateurs, journal
+   d'audit (cf. itération 3).
+5. Migration `sqlx` 0.6 → 0.7/0.8 (cf. itération 6).
+6. Intégration d'une extension de portefeuille Ğ1 pour éviter le
+   copier-coller manuel du défi/signature.
+7. Bascule d'activation de l'identité Ğ1 par organisation (écran
+   "Paramètres").

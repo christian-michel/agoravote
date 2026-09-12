@@ -5,6 +5,7 @@ import { AdminLayout } from "./components/AdminLayout";
 import Home from "./pages/Home";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
+import G1Login from "./pages/G1Login";
 import AdminHome from "./pages/AdminHome";
 import CampaignsList from "./pages/CampaignsList";
 import ModulesPage from "./pages/ModulesPage";
@@ -34,6 +35,7 @@ export default function App() {
           <Route path="/" element={<Shell><Home /></Shell>} />
           <Route path="/connexion" element={<Shell><Login /></Shell>} />
           <Route path="/inscription" element={<Shell><Register /></Shell>} />
+          <Route path="/connexion-g1" element={<Shell><G1Login /></Shell>} />
           <Route
             path="/admin"
             element={

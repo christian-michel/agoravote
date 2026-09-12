@@ -7,7 +7,7 @@
 use sqlx::postgres::PgPoolOptions;
 use sqlx::{Row, Transaction};
 
-use agoravote_core::{Account, Ballot, Campaign, Form, Id, ResultSet, Session, User};
+use agoravote_core::{Account, Ballot, Campaign, Form, G1Link, Id, ResultSet, Session, User};
 
 use crate::StoreError;
 
@@ -231,7 +231,7 @@ impl PgStore {
 
         match result {
             Ok(_) => Ok(()),
-            Err(err) => Err(map_unique_violation(err)),
+            Err(err) => Err(map_unique_violation(err, StoreError::EmailAlreadyExists)),
         }
     }
 
@@ -292,18 +292,62 @@ impl PgStore {
             .await?;
         Ok(())
     }
+
+    // --- Identité Ğ1v2 optionnelle (addendum v0.3) ---
+
+    pub async fn insert_g1_link(&self, link: G1Link) -> Result<(), StoreError> {
+        let result = sqlx::query(
+            "INSERT INTO g1_links (id, user_id, public_key_hex, linked_at)
+             VALUES ($1, $2, $3, $4)",
+        )
+        .bind(link.id)
+        .bind(link.user_id)
+        .bind(&link.public_key_hex)
+        .bind(link.linked_at)
+        .execute(&self.pool)
+        .await;
+
+        match result {
+            Ok(_) => Ok(()),
+            Err(err) => Err(map_unique_violation(
+                err,
+                StoreError::G1PublicKeyAlreadyLinked,
+            )),
+        }
+    }
+
+    pub async fn get_g1_link_by_public_key(
+        &self,
+        public_key_hex: &str,
+    ) -> Result<Option<G1Link>, StoreError> {
+        let row = sqlx::query(
+            "SELECT id, user_id, public_key_hex, linked_at FROM g1_links WHERE public_key_hex = $1",
+        )
+        .bind(public_key_hex)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(row.map(|row| G1Link {
+            id: row.get("id"),
+            user_id: row.get("user_id"),
+            public_key_hex: row.get("public_key_hex"),
+            linked_at: row.get("linked_at"),
+        }))
+    }
 }
 
 /// Convertit une violation de contrainte `UNIQUE` PostgreSQL (code
-/// d'erreur `23505`) en [`StoreError::EmailAlreadyExists`], et
-/// laisse passer toute autre erreur telle quelle. Isolé dans une
-/// fonction pour ne l'écrire qu'une fois — utile si d'autres colonnes
-/// uniques apparaissent un jour (ex : un identifiant Ğ1, cf. addendum
-/// v0.3 du cahier des charges).
-fn map_unique_violation(err: sqlx::Error) -> StoreError {
+/// d'erreur `23505`) en l'erreur `on_conflict` fournie par l'appelant,
+/// et laisse passer toute autre erreur telle quelle. `on_conflict`
+/// plutôt qu'une valeur fixe : plusieurs colonnes uniques distinctes
+/// partagent ce même code d'erreur générique côté PostgreSQL
+/// (`accounts.email`, `g1_links.public_key_hex`), donc seul l'appelant
+/// sait quelle violation est réellement possible pour la requête
+/// qu'il vient d'exécuter.
+fn map_unique_violation(err: sqlx::Error, on_conflict: StoreError) -> StoreError {
     if let sqlx::Error::Database(ref db_err) = err {
         if db_err.code().as_deref() == Some("23505") {
-            return StoreError::EmailAlreadyExists;
+            return on_conflict;
         }
     }
     StoreError::Database(err)

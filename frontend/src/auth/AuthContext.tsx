@@ -30,6 +30,14 @@ interface AuthState {
   status: "checking" | "authenticated" | "anonymous";
   login: (email: string, password: string) => Promise<void>;
   register: (input: { organizationId: string; email: string; password: string; displayName: string }) => Promise<void>;
+  /** Identité Ğ1v2 optionnelle (addendum v0.3) — cf. `pages/G1Login.tsx`,
+   * qui a déjà obtenu le défi signé avant d'appeler ceci. */
+  loginWithG1: (input: {
+    organizationId: string;
+    publicKeyHex: string;
+    signatureHex: string;
+    message: string;
+  }) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -91,6 +99,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setStatus("authenticated");
   };
 
+  const loginWithG1: AuthState["loginWithG1"] = async ({
+    organizationId,
+    publicKeyHex,
+    signatureHex,
+    message,
+  }) => {
+    const result = await api.g1Verify({
+      organization_id: organizationId,
+      public_key_hex: publicKeyHex,
+      signature_hex: signatureHex,
+      message,
+    });
+    setStoredToken(result.token);
+    setUser(result.user);
+    setStatus("authenticated");
+  };
+
   const logout: AuthState["logout"] = async () => {
     try {
       await api.logout();
@@ -106,7 +131,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, status, login, register, logout }}>
+    <AuthContext.Provider value={{ user, status, login, register, loginWithG1, logout }}>
       {children}
     </AuthContext.Provider>
   );

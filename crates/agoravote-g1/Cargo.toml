@@ -1,34 +1,26 @@
 [package]
 name = "agoravote-g1"
 description = "Module d'identité optionnel : preuve de possession de clé Ğ1v2 et vérification d'adhésion à la toile de confiance (cf. addendum v0.3 du cahier des charges)"
-# Valeurs explicites plutôt que `.workspace = true` : ce crate est
-# volontairement exclu du workspace racine (cf. Cargo.toml racine et
-# `crates/agoravote-g1/README.md`), donc il ne peut pas hériter des
-# clés `[workspace.package]` — Cargo refuserait de le construire même
-# de façon autonome sinon ("current package believes it's in a
-# workspace when it's not").
-version = "0.1.0"
-edition = "2021"
-license = "AGPL-3.0-or-later"
-authors = ["AgoraVote contributors"]
-
-[workspace]
-# Fait de ce crate la racine de SON PROPRE petit workspace à un seul
-# membre, avec son propre `Cargo.lock` — indépendant de celui du
-# projet principal. Sans cette section, Cargo remonterait
-# l'arborescence de dossiers, trouverait le `[workspace]` racine
-# d'AgoraVote, et refuserait de construire ce crate puisqu'il n'y est
-# plus listé comme membre (cf. commentaire ci-dessus).
+# Réintégré au workspace principal en itération 8 (cf. docs/DEVLOG.md) :
+# la contrainte de toolchain qui imposait un `[workspace]` séparé (voir
+# l'historique git de ce fichier) est levée depuis l'itération 6 — ce
+# crate compile désormais dans le même `cargo build --workspace` que le
+# reste du projet. Nécessaire pour que `agoravote-api` puisse en
+# dépendre par chemin : Cargo refuse qu'un membre de workspace dépende
+# d'un crate qui se déclare racine de SON PROPRE workspace séparé
+# ("multiple workspace roots found in the same workspace").
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
 
 [dependencies]
 agoravote-core = { path = "../agoravote-core" }
-# Versions explicites (pas `.workspace = true`, cf. note ci-dessus sur
-# l'exclusion de ce crate du workspace racine).
-serde = { version = "1", features = ["derive"] }
-chrono = { version = "0.4", features = ["serde"] }
-thiserror = "1"
+serde.workspace = true
+chrono.workspace = true
+thiserror.workspace = true
 tracing = "0.1"
-uuid = { version = "1", features = ["v4", "serde"] }
+uuid.workspace = true
 
 # `subxt-signer` : uniquement la cryptographie (sr25519, encodage SS58),
 # SANS le client réseau complet — c'est la brique qui permet de vérifier
@@ -55,42 +47,31 @@ uuid = { version = "1", features = ["v4", "serde"] }
 # jamais, mais le test, lui, en a besoin pour produire un vecteur.
 subxt-signer = { version = "0.37", default-features = false, features = ["sr25519", "subxt", "std"], optional = true }
 
-# --- État de vérification de ce crate dans CET environnement ---
+# --- État de vérification de ce crate ---
 #
-# Ni `subxt-signer` seul (vérification de signature, ci-dessus) ni
-# `subxt` (requêtes réseau, ci-dessous) n'ont pu être compilés dans ce
-# bac à sable de développement (rustc 1.75 via apt). Deux sessions de
-# bisection ont été menées (même méthode que pour `sqlx`, cf.
-# `crates/agoravote-store/Cargo.toml`) : la seconde a progressé bien
-# plus loin que la première avant de buter sur un mur.
+# Historique (rustc 1.75, environnement de développement d'origine) :
+# ni `subxt-signer` seul (vérification de signature, ci-dessus) ni
+# `subxt` (requêtes réseau, ci-dessous) ne compilaient alors. Deux
+# sessions de bisection de dépendances avaient identifié la chaîne de
+# blocages suivante, chacun résolu par un simple épinglage de version
+# (même méthode que pour `sqlx`, cf. `crates/agoravote-store/Cargo.toml`) :
+# constant_time_eq (0.4.x exige l'édition 2024 — seul 0.3.1 fonctionne)
+# → indexmap → zeroize/zeroize_derive → toml_parser (1.0.4 exige rustc
+# 1.76 ; 1.0.1 fonctionne) → parity-scale-codec (3.7.5 exige rustc 1.79 ;
+# 3.6.12 fonctionne) → parity-scale-codec-derive (même correctif) →
+# `toml_datetime` (exige rustc 1.76). Avec rustc 1.94 (itération 6,
+# cf. docs/DEVLOG.md), tous ces épinglages ont suffi à compiler et
+# tester l'intégralité du crate, `chain-query` compris — ils restent en
+# place tels quels (versions exactes déjà vérifiées fonctionnelles,
+# aucune raison de les faire bouger sans nécessité).
 #
-# Chaîne de blocages successifs identifiés et contournés, dans l'ordre
-# où ils sont apparus (chacun un simple épinglage de version, comme
-# pour `sqlx`) : constant_time_eq (0.4.2 puis 0.4.1 puis 0.4.0 exigent
-# tous l'édition 2024 — seul 0.3.1 fonctionne) → indexmap (2.14.2) →
-# zeroize/zeroize_derive (déjà épinglés ci-dessous) → toml_parser
-# (1.0.4 exige rustc 1.76 ; 1.0.1 fonctionne) → parity-scale-codec
-# (3.7.5 exige rustc 1.79 ; 3.6.12 fonctionne) → parity-scale-codec-derive
-# (même correctif) → **blocage final, non résolu** : `toml_datetime
-# v0.7.5+spec-1.1.0` exige rustc 1.76, réclamé par une dépendance non
-# identifiée (le tracer avec `cargo tree` était impossible sans
-# résolution réussie ; ni l'épinglage direct de `toml_datetime`, ni de
-# `toml_edit`, ni de `toml`, ni de `rustc_version`/`proc-macro-crate`
-# à des versions plus anciennes n'a permis de le contourner).
-#
-# Conséquence assumée et documentée en détail dans
-# `docs/G1_INTEGRATION.md` et `crates/agoravote-g1/README.md` :
-# **tout le code de ce crate — y compris la vérification de signature,
-# la partie la plus simple — est écrit avec soin mais n'a été ni
-# compilé ni testé dans cet environnement.** Il doit être compilé et
-# vérifié dans un environnement à toolchain Rust à jour (l'image
-# Docker de ce projet, par exemple — un `cargo build` avec un rustc
-# 2026 récent n'aurait probablement aucun des problèmes ci-dessus,
-# puisqu'ils sont tous des questions de MSRV/édition, pas de bugs)
-# avant toute utilisation. C'est une exception au reste de ce projet,
-# où chaque ligne livrée a été testée avant d'être présentée comme
-# fonctionnelle — cf. `crates/agoravote-g1/README.md` pour le pourquoi
-# de cette exception et la marche à suivre pour la lever.
+# Ce qui reste non vérifié aujourd'hui n'est PAS un problème de
+# compilation : c'est `chain.rs` (requêtes réseau vers un nœud Ğ1v2),
+# jamais exécuté contre un vrai nœud faute d'accès réseau à
+# l'infrastructure Duniter depuis un environnement de développement
+# utilisé jusqu'ici (testé et confirmé bloqué à plusieurs reprises,
+# cf. docs/G1_INTEGRATION.md) — feature `chain-query`, désactivée par
+# défaut et non activée par `agoravote-api` (cf. son Cargo.toml).
 subxt = { version = "0.37", default-features = false, features = ["jsonrpsee", "native"], optional = true }
 tokio = { version = "1", features = ["rt-multi-thread"], optional = true }
 

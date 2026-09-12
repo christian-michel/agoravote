@@ -65,6 +65,13 @@ export default function Login() {
           Créer un compte organisateur
         </Link>
       </p>
+      <p className="mt-2 text-sm text-muted">
+        Ou{" "}
+        <Link to="/connexion-g1" className="text-accent hover:underline">
+          se connecter avec un compte Ğ1
+        </Link>{" "}
+        (identité décentralisée optionnelle).
+      </p>
     </div>
   );
 }

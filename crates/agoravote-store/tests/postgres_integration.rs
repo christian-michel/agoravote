@@ -233,3 +233,48 @@ async fn session_peut_etre_creee_lue_puis_supprimee() {
     store.delete_session(&token_hash).await.unwrap();
     assert!(store.get_session(&token_hash).await.unwrap().is_none());
 }
+
+#[tokio::test]
+#[ignore]
+async fn lien_g1_survit_a_un_aller_retour_et_la_cle_publique_est_unique() {
+    let store = test_store().await;
+    let user = agoravote_core::User::new(Id::new_v4(), "Test Ğ1");
+    let user_id = user.id;
+    store.insert_user(user).await.unwrap();
+
+    let public_key_hex = format!("{}{}", Id::new_v4().simple(), Id::new_v4().simple());
+    let link = agoravote_core::G1Link::new(user_id, &public_key_hex);
+    store.insert_g1_link(link).await.unwrap();
+
+    let fetched = store
+        .get_g1_link_by_public_key(&public_key_hex)
+        .await
+        .unwrap()
+        .expect("lien relu");
+    assert_eq!(fetched.user_id, user_id);
+
+    // Un second lien vers la même clé publique doit être refusé (elle
+    // ne peut être liée qu'à un seul utilisateur AgoraVote) — pas
+    // silencieusement écrasé, même logique que pour l'email unique
+    // d'un compte classique.
+    let other_user = agoravote_core::User::new(Id::new_v4(), "Autre utilisateur");
+    let other_user_id = other_user.id;
+    store.insert_user(other_user).await.unwrap();
+    let duplicate = agoravote_core::G1Link::new(other_user_id, &public_key_hex);
+    let result = store.insert_g1_link(duplicate).await;
+    assert!(matches!(
+        result,
+        Err(agoravote_store::StoreError::G1PublicKeyAlreadyLinked)
+    ));
+}
+
+#[tokio::test]
+#[ignore]
+async fn lien_g1_absent_renvoie_none_pas_une_erreur() {
+    let store = test_store().await;
+    let result = store
+        .get_g1_link_by_public_key("clé-inexistante")
+        .await
+        .unwrap();
+    assert!(result.is_none());
+}

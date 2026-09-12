@@ -7,17 +7,17 @@ members = [
     "crates/agoravote-store",
     "crates/agoravote-auth",
     "crates/agoravote-api",
+    "crates/agoravote-g1",
 ]
-# `crates/agoravote-g1` est VOLONTAIREMENT exclu de cette liste — cf.
-# `crates/agoravote-g1/README.md`. Son arbre de dépendances
-# (cryptographie Substrate) ne compile pas avec la toolchain de
-# développement de cet environnement (rustc 1.75), et un workspace
-# Cargo résout un seul `Cargo.lock` pour TOUS ses membres : y inclure
-# ce crate ferait échouer `cargo build --workspace` pour tout le
-# monde, pas seulement pour lui. Il reste un crate Rust valide,
-# buildable indépendamment (`cargo build --manifest-path
-# crates/agoravote-g1/Cargo.toml`) dans un environnement à toolchain
-# à jour, avec son propre `Cargo.lock` séparé.
+# `agoravote-g1` a rejoint le workspace principal en itération 8 (cf.
+# docs/DEVLOG.md) : `agoravote-api` a besoin d'en dépendre par chemin
+# pour câbler l'identité Ğ1v2 optionnelle (addendum v0.3), ce que Cargo
+# refuse tant que ce crate déclare sa propre section `[workspace]`
+# séparée ("multiple workspace roots found in the same workspace").
+# La contrainte de toolchain qui avait motivé cette exclusion (rustc
+# 1.75, cf. l'historique git de ce fichier) est levée depuis
+# l'itération 6 : l'arbre de dépendances cryptographique compile
+# désormais dans ce même `cargo build --workspace`.
 
 # Métadonnées partagées par tous les crates du workspace.
 # cf. cahier des charges §12 "Architecture technique cible" :

@@ -39,7 +39,7 @@
 pub mod memory;
 pub mod postgres;
 
-use agoravote_core::{Account, Ballot, Campaign, Form, Id, ResultSet, Session, User};
+use agoravote_core::{Account, Ballot, Campaign, Form, G1Link, Id, ResultSet, Session, User};
 
 /// Erreurs de persistance. Volontairement peu détaillé pour l'appelant
 /// HTTP (`agoravote-api`) : le détail exact (quelle requête SQL a
@@ -66,6 +66,14 @@ pub enum StoreError {
     /// ne jamais fuiter de détail technique brut au client.
     #[error("un compte existe déjà avec cette adresse e-mail")]
     EmailAlreadyExists,
+
+    /// Même raisonnement que `EmailAlreadyExists` ci-dessus, pour la
+    /// contrainte d'unicité de `g1_links.public_key_hex` (cf. migration
+    /// `0003_g1_link.sql`) : un attaquant qui rejouerait une preuve
+    /// Ğ1 déjà liée à un autre compte doit recevoir un message utile,
+    /// pas une 500 générique.
+    #[error("cette clé Ğ1 est déjà liée à un autre compte")]
+    G1PublicKeyAlreadyLinked,
 }
 
 /// Point d'accès unique à la persistance, quel que soit le backend.
@@ -247,6 +255,31 @@ impl Store {
         match self {
             Self::Memory(s) => s.delete_session(token_hash).await,
             Self::Postgres(s) => s.delete_session(token_hash).await,
+        }
+    }
+
+    // --- Identité Ğ1v2 optionnelle (addendum v0.3) ---
+
+    /// Lie une clé publique Ğ1 à un utilisateur existant. Échoue avec
+    /// `StoreError::G1PublicKeyAlreadyLinked` si cette clé est déjà
+    /// liée à un compte (le sien ou un autre) — appelé uniquement
+    /// après vérification de la preuve de possession de clé
+    /// (`agoravote_g1::verify_signature`), jamais sur une simple
+    /// déclaration non prouvée.
+    pub async fn insert_g1_link(&self, link: G1Link) -> Result<(), StoreError> {
+        match self {
+            Self::Memory(s) => s.insert_g1_link(link).await,
+            Self::Postgres(s) => s.insert_g1_link(link).await,
+        }
+    }
+
+    pub async fn get_g1_link_by_public_key(
+        &self,
+        public_key_hex: &str,
+    ) -> Result<Option<G1Link>, StoreError> {
+        match self {
+            Self::Memory(s) => s.get_g1_link_by_public_key(public_key_hex).await,
+            Self::Postgres(s) => s.get_g1_link_by_public_key(public_key_hex).await,
         }
     }
 }

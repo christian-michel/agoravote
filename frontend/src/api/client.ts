@@ -17,6 +17,7 @@ export type ResultSet = components["schemas"]["ResultSet"];
 export type User = components["schemas"]["User"];
 export type ModuleManifest = components["schemas"]["ModuleManifest"];
 export type CreateQuestionRequest = components["schemas"]["CreateQuestionRequest"];
+export type G1ChallengeResponse = components["schemas"]["G1ChallengeResponse"];
 
 /**
  * En développement, Vite proxifie `/api/*` vers `http://localhost:3000`
@@ -113,6 +114,17 @@ export const api = {
   logout: () => request<void>("/auth/logout", { method: "POST" }),
 
   me: () => request<User>("/auth/me"),
+
+  /** Identité Ğ1v2 optionnelle (addendum v0.3) — cf. `docs/G1_INTEGRATION.md`
+   * §4 et `Ğ1Login.tsx` pour le parcours complet. */
+  g1Challenge: () => request<G1ChallengeResponse>("/auth/g1/challenge", { method: "POST" }),
+
+  g1Verify: (body: {
+    organization_id: string;
+    public_key_hex: string;
+    signature_hex: string;
+    message: string;
+  }) => request<{ token: string; user: User }>("/auth/g1/verify", { method: "POST", body }),
 
   createCampaign: (body: { organization_id: string; title: string }) =>
     request<Campaign>("/campaigns", { method: "POST", body }),

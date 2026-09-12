@@ -5,54 +5,58 @@ d'un compte Ğ1v2 (signature) et vérification d'adhésion à la toile de
 confiance (requête à la chaîne). Cf. l'addendum v0.3 du cahier des
 charges (« Identité décentralisée et trajectoire Web3 ») et
 `docs/G1_INTEGRATION.md` à la racine du dépôt pour la documentation
-complète.
+complète, ainsi que `docs/SECURITY.md` §8 pour les choix de sécurité.
 
-## ⚠️ Pourquoi ce crate est hors du workspace principal
+## Membre du workspace principal depuis l'itération 8
 
-Regardez `Cargo.toml` à la racine du dépôt : `crates/agoravote-g1`
-**n'est pas** dans la liste `members`. C'est volontaire, pas un oubli.
+Ce crate a longtemps eu sa propre section `[workspace]` (regardez
+l'historique git de `Cargo.toml`, ici et à la racine du dépôt) : sa
+chaîne de dépendances cryptographiques (`subxt-signer`, `subxt`) ne
+compilait pas avec la toolchain `rustc 1.75` utilisée à l'origine pour
+développer le reste du projet, et un workspace Cargo résout un seul
+`Cargo.lock` pour tous ses membres — l'inclure aurait alors cassé la
+compilation de tout le reste (`cargo test --workspace`, la CI, `make
+check`). Avec une toolchain à jour (rustc 1.94, cf. `docs/DEVLOG.md`
+itération 6), cette contrainte a disparu : `crates/agoravote-g1` est
+réintégré à `members` dans le `Cargo.toml` racine depuis l'itération 8
+et partage désormais le même `Cargo.lock` que le reste du projet.
+Cette réintégration était nécessaire, pas seulement possible :
+`agoravote-api` a besoin d'en dépendre par chemin pour câbler les
+routes `/auth/g1/challenge`/`/auth/g1/verify`, ce que Cargo refuse tant
+qu'un crate déclare sa propre section `[workspace]` séparée
+("multiple workspace roots found in the same workspace").
 
-Sa chaîne de dépendances (cryptographie Substrate : `subxt-signer`,
-`subxt`) ne compile pas avec la toolchain `rustc 1.75` utilisée pour
-développer le reste de ce projet (voir le détail des blocages dans
-`Cargo.toml` de ce crate). Un workspace Cargo résout **un seul**
-`Cargo.lock` pour tous ses membres : si ce crate y était inclus,
-**tout le reste du projet cesserait de compiler** — `cargo test
---workspace`, la CI, `make check`, tout. Ça s'est produit une fois
-pendant le développement (cf. `docs/DEVLOG.md`) et a été corrigé en
-sortant ce crate du workspace.
+## Statut : `challenge`/`signature` câblés en production, `chain` toujours non vérifié
 
-Techniquement, `crates/agoravote-g1` est donc son propre petit
-workspace à un seul membre (cf. la section `[workspace]` vide dans son
-`Cargo.toml`), avec son propre `Cargo.lock`, indépendant de celui du
-projet principal.
-
-## Statut : compilé et testé pour `challenge`/`signature`, `chain` toujours non vérifié
-
-**Mise à jour** (cf. `docs/DEVLOG.md`, itération 6) : compilé avec
-succès dans un environnement à toolchain Rust à jour (rustc 1.94),
-`docker compose`, accès réseau à `crates.io`/`static.rust-lang.org`.
-`challenge.rs` et `signature.rs` sont désormais compilés **et
-testés** (`cargo test -p agoravote-g1 --features chain-query`, 9
-tests verts, dont un vecteur sr25519 connu — compte de développement
-Substrate standard `//Alice`) — au même niveau d'exigence que le reste
-du projet. Une seule correction d'API a été nécessaire : `verify` est
-une fonction libre du module `subxt_signer::sr25519`, pas une méthode
-de `PublicKey`, comme le fichier l'indiquait déjà comme hypothèse à
-vérifier.
+`challenge.rs` et `signature.rs` sont compilés, testés (`cargo test -p
+agoravote-g1 --features chain-query`, 13 tests verts, dont un vecteur
+sr25519 connu — compte de développement Substrate standard `//Alice`)
+**et utilisés en production** : `agoravote-api` dépend de la feature
+`signature-verification` (cf. son `Cargo.toml`) pour
+`POST /auth/g1/challenge` et `POST /auth/g1/verify` (cf.
+`docs/G1_INTEGRATION.md` §4 et `docs/DEVLOG.md` itération 8). Le
+protocole défi/signature prouve la possession de clé sans jamais
+transmettre la phrase de 12 mots, avec une fraîcheur de défi vérifiable
+sans état serveur (`Challenge::verify_freshness`, horodatage embarqué
+dans le texte signé).
 
 `chain.rs` compile également (API dynamique `subxt::dynamic`, non
-typée contre un schéma précis) mais **reste non vérifié à
-l'exécution** : l'infrastructure réseau Duniter/Ğ1 (`rpc.duniter.org`,
-`g1-squid.axiom-team.fr`, un nœud `gdev`) reste bloquée par la liste
-blanche réseau de cet environnement, testé à nouveau et confirmé
-bloqué. Les noms de stockage (`IdentityIndexOf`, `Membership`) restent
-donc des hypothèses non confirmées contre une métadonnée de nœud réel.
+typée contre un schéma précis, feature `chain-query`) mais **reste non
+vérifié à l'exécution ni câblé à aucune route** : l'infrastructure
+réseau Duniter/Ğ1 (`rpc.duniter.org`, `g1-squid.axiom-team.fr`, un
+nœud `gdev`) reste bloquée par la liste blanche réseau de tout
+environnement de développement utilisé jusqu'ici, testé à nouveau et
+confirmé bloqué en itération 8. Les noms de stockage
+(`IdentityIndexOf`, `Membership`) restent donc des hypothèses non
+confirmées contre une métadonnée de nœud réel — cf. `docs/SECURITY.md`
+§8 pour l'explication complète de ce que `POST /auth/g1/verify` prouve
+(possession de clé) et ne prouve PAS (appartenance à la toile de
+confiance) tant que `chain-query` n'est pas câblé.
 
-## Pour le rendre entièrement utilisable
+## Pour aller plus loin
 
 1. ~~Compiler dans un environnement à toolchain Rust à jour~~ — fait
-   (rustc 1.94, cf. ci-dessus).
+   (rustc 1.94, cf. `docs/DEVLOG.md` itération 6).
 2. **Confirmer les noms de stockage** contre un vrai nœud `gdev`
    (réseau de test — jamais `g1` en premier), depuis un environnement
    qui a accès réseau à l'infrastructure Duniter (celui-ci ne l'a
@@ -61,17 +65,12 @@ donc des hypothèses non confirmées contre une métadonnée de nœud réel.
    `Identity` et `Membership`).
 3. ~~Ajouter un test avec un vecteur sr25519 connu~~ — fait
    (`signature.rs`, vecteur `//Alice`).
-4. **Réintégrer dans le workspace principal** une fois l'étape 2
-   validée, en rajoutant `"crates/agoravote-g1"` à `members` dans le
-   `Cargo.toml` racine — et en vérifiant que `cargo test --workspace`
-   passe toujours entièrement à ce moment-là. Pas encore fait : ce
-   crate reste volontairement hors du workspace principal tant que
-   `chain.rs` (activé seulement par la feature `chain-query`, non
-   utilisée par défaut) n'a pas été confronté à un nœud réel — même
-   si, contrairement à l'itération précédente, l'inclure ne casserait
-   plus la compilation du reste du workspace (toolchain suffisante
-   désormais).
-
-5. Seulement alors, câbler ce crate dans `agoravote-api` (nouvelles
-   routes `/auth/g1/challenge`, `/auth/g1/verify` — cf. le sketch
-   d'intégration dans `docs/G1_INTEGRATION.md`).
+4. ~~Réintégrer dans le workspace principal~~ — fait, cf. ci-dessus
+   (itération 8).
+5. ~~Câbler ce crate dans `agoravote-api`~~ — fait pour
+   `signature-verification` (itération 8, cf.
+   `docs/G1_INTEGRATION.md` §4). Reste à faire une fois l'étape 2
+   validée : câbler `chain-query` (`chain::check_membership`) comme
+   vérification optionnelle supplémentaire, par campagne, sur
+   `/auth/g1/verify` — sans jamais la présenter comme déjà active tant
+   qu'elle ne l'est pas.

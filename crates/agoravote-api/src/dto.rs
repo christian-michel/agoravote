@@ -102,6 +102,45 @@ pub struct AuthResponse {
     pub user: agoravote_core::User,
 }
 
+/// Réponse à `POST /auth/g1/challenge` — cf. `docs/G1_INTEGRATION.md`
+/// §4. Reprend directement les deux champs d'`agoravote_g1::Challenge`
+/// (pas de `#[serde(flatten)]` sur le type importé : ce DTO reste
+/// libre d'évoluer indépendamment du type interne du crate `agoravote-g1`,
+/// même principe que le reste de ce fichier, cf. doc de module).
+#[derive(Debug, Serialize)]
+pub struct G1ChallengeResponse {
+    pub message: String,
+    pub expires_at: chrono::DateTime<chrono::Utc>,
+}
+
+impl From<agoravote_g1::Challenge> for G1ChallengeResponse {
+    fn from(challenge: agoravote_g1::Challenge) -> Self {
+        Self {
+            message: challenge.message,
+            expires_at: challenge.expires_at,
+        }
+    }
+}
+
+/// Corps de requête : `POST /auth/g1/verify` (cf.
+/// `docs/G1_INTEGRATION.md` §4). `message` doit être exactement le
+/// texte renvoyé par `POST /auth/g1/challenge` — c'est lui qui porte
+/// l'horodatage d'expiration vérifié par
+/// `agoravote_g1::Challenge::verify_freshness` (cf. `routes.rs::g1_verify`).
+///
+/// `organization_id` n'est utilisé que lors de la toute première
+/// vérification d'une clé publique Ğ1 encore inconnue : elle détermine
+/// l'organisation du nouveau `User` auto-provisionné. Pour une clé déjà
+/// liée à un compte existant, ce champ est ignoré (le `User` existant
+/// et son organisation d'origine priment) — cf. le handler.
+#[derive(Debug, Deserialize)]
+pub struct G1VerifyRequest {
+    pub organization_id: Id,
+    pub public_key_hex: String,
+    pub signature_hex: String,
+    pub message: String,
+}
+
 /// Réponse d'erreur uniforme, pour que le client de l'API n'ait qu'un
 /// seul format à gérer quel que soit le code HTTP renvoyé.
 #[derive(Debug, Serialize)]

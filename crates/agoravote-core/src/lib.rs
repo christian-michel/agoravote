@@ -53,7 +53,7 @@ pub mod voting_method;
 // publics malgré tout, pour la documentation (`cargo doc`) et pour
 // les usages qui veulent le chemin complet.
 pub use audit::AuditEvent;
-pub use auth::{Account, Session};
+pub use auth::{Account, G1Link, Session};
 pub use ballot::Ballot;
 pub use campaign::{Campaign, CampaignStatus};
 pub use form::{Form, Question, QuestionType};
