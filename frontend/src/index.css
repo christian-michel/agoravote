@@ -1,10 +1,11 @@
 /* Tokens de design AgoraVote — cf. frontend/DESIGN.md pour le plan
    complet et sa justification.
 
-   Direction retenue : « papier de scrutin civique » — lisible, sobre,
-   un seul accent délibéré (le vert utilisé pour les actions
-   affirmatives : voter, publier), sans le fond crème/serif à contraste
-   générique ni le kit SaaS de cartes identiques. Polices auto-hébergées
+   Direction retenue depuis l'itération 7 (cf. docs/DEVLOG.md) : les six
+   planches UX fournies par le porteur de projet et référencées au §10
+   du cahier des charges — nav latérale, tableau de bord dense,
+   graphiques — remplacent la direction « papier de scrutin civique »
+   choisie avant d'y avoir eu accès. Polices auto-hébergées
    (@fontsource, pas de CDN Google Fonts) : cohérent avec le principe
    d'auto-hébergement déjà posé au §1.1 du cahier des charges pour le
    backend — le frontend ne doit pas dépendre d'un service tiers pour
@@ -12,36 +13,54 @@
 
 @import "tailwindcss";
 
-/* Fraunces : serif éditoriale pour les titres — évoque le document
-   officiel/le bulletin, pas un générateur de logo startup. */
-@import "@fontsource/fraunces/400.css";
-@import "@fontsource/fraunces/500.css";
-@import "@fontsource/fraunces/600-italic.css";
-
-/* Inter : grotesque très lisible pour l'interface et le corps de texte. */
+/* Inter : grotesque très lisible, seule famille désormais — les
+   planches n'utilisent nulle part de serif éditoriale. */
 @import "@fontsource/inter/400.css";
 @import "@fontsource/inter/500.css";
 @import "@fontsource/inter/600.css";
 @import "@fontsource/inter/700.css";
+@import "@fontsource/inter/800.css";
 
 @theme {
-  --color-ink: #14213d;
-  --color-ink-soft: #3a4a63;
-  --color-paper: #f5f6f1;
+  --color-ink: #101828;
+  --color-ink-soft: #475467;
+  --color-paper: #f9fafb;
   --color-surface: #ffffff;
-  --color-line: #ddd9c9;
-  --color-muted: #5b6472;
+  --color-line: #e4e7ec;
+  --color-muted: #667085;
 
   /* Accent unique, réservé aux actions affirmatives (voter, publier,
-     confirmer) — cf. DESIGN.md : ne pas le disperser en décoration. */
-  --color-accent: #2f6f4e;
-  --color-accent-strong: #234f38;
-  --color-accent-soft: #e4efe8;
+     confirmer, enregistrer) — cf. DESIGN.md. Bleu plutôt que vert
+     depuis l'itération 7, pour correspondre aux planches fournies. */
+  --color-accent: #2a78d6;
+  --color-accent-strong: #184f95;
+  --color-accent-soft: #eaf2fc;
 
-  --color-danger: #b3261e;
-  --color-danger-soft: #fbe9e7;
+  --color-danger: #d03b3b;
+  --color-danger-soft: #fbeaea;
 
-  --font-display: "Fraunces", ui-serif, Georgia, serif;
+  /* Palette catégorielle fixe (jamais recyclée par index — cf. skill
+     dataviz) : utilisée pour les graphiques (barres, donut) ET les
+     puces colorées des cartes statistiques du tableau de bord, dans
+     cet ordre. */
+  --color-chart-1: #2a78d6; /* bleu */
+  --color-chart-2: #eb6834; /* orange */
+  --color-chart-3: #1baf7a; /* aqua */
+  --color-chart-4: #eda100; /* jaune */
+  --color-chart-5: #e87ba4; /* magenta */
+  --color-chart-6: #008300; /* vert */
+  --color-chart-7: #4a3aa7; /* violet */
+  --color-chart-8: #e34948; /* rouge */
+
+  /* Palette de statut fixe (jamais réutilisée pour une série) —
+     toujours accompagnée d'un libellé, jamais de la couleur seule. */
+  --color-status-good: #0ca30c;
+  --color-status-good-soft: #e6f7e6;
+  --color-status-warning: #b8790f;
+  --color-status-warning-soft: #fdf3de;
+  --color-status-neutral-soft: #eef0f3;
+
+  --font-display: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
 }
 

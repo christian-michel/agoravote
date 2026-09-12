@@ -77,9 +77,12 @@ export default function CampaignManage() {
 
   return (
     <div className="flex flex-col gap-8">
+      <Link to="/admin/campagnes" className="text-xs text-muted hover:text-ink">
+        ← Campagnes
+      </Link>
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="font-display text-3xl font-medium text-ink">{campaign.title}</h1>
+          <h1 className="text-2xl font-semibold text-ink">{campaign.title}</h1>
           <div className="mt-2 flex items-center gap-3">
             <StatusBadge status={campaign.status} />
             <span className="text-xs text-muted">
@@ -119,7 +122,17 @@ export default function CampaignManage() {
 
       {campaign.status !== "Draft" && form && (
         <div className="flex flex-col gap-6">
-          <h2 className="font-display text-xl font-medium text-ink">Questions</h2>
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-ink">Questions</h2>
+            {form.questions.length > 1 && (
+              <Link
+                to={`/admin/campagnes/${campaignId}/analyse`}
+                className="text-sm text-accent hover:underline"
+              >
+                Analyse et visualisation →
+              </Link>
+            )}
+          </div>
           {form.questions.map((question) => (
             <div key={question.id} className="flex flex-col gap-2">
               {campaign.status === "Published" && (

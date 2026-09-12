@@ -10,7 +10,7 @@ export function Button({
   ...props
 }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: "primary" | "secondary" | "danger" }) {
   const base =
-    "inline-flex items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50";
+    "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md px-4 py-2.5 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50";
   const variants = {
     primary: "bg-accent text-white hover:bg-accent-strong",
     secondary: "border border-line bg-surface text-ink hover:bg-paper",
@@ -62,6 +62,36 @@ export function Alert({ kind = "error", children }: { kind?: "error" | "success"
   return <div className={`rounded-md border px-4 py-3 text-sm ${styles}`}>{children}</div>;
 }
 
+/** Carte statistique du tableau de bord (planche 1) — la puce colorée
+ * suit la palette catégorielle fixe (cf. index.css --color-chart-*,
+ * skill dataviz), jamais une couleur arbitraire par carte. */
+export function StatCard({
+  label,
+  value,
+  icon,
+  hue = "var(--color-chart-1)",
+}: {
+  label: string;
+  value: string | number;
+  icon: ReactNode;
+  hue?: string;
+}) {
+  return (
+    <Card className="flex items-center gap-4">
+      <span
+        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl"
+        style={{ background: `color-mix(in srgb, ${hue} 14%, white)`, color: hue }}
+      >
+        {icon}
+      </span>
+      <div className="min-w-0">
+        <p className="text-2xl font-semibold text-ink">{value}</p>
+        <p className="truncate text-sm text-muted">{label}</p>
+      </div>
+    </Card>
+  );
+}
+
 /** Libellé de statut (Draft/Published/Closed) — un mot par état,
  * jamais un jargon système (cf. skill de design : nommer ce que la
  * personne comprend, pas comment le système est construit). */
@@ -72,8 +102,8 @@ export function StatusBadge({ status }: { status: "Draft" | "Published" | "Close
     Closed: "Clôturée",
   };
   const styles: Record<typeof status, string> = {
-    Draft: "bg-line/60 text-ink-soft",
-    Published: "bg-accent-soft text-accent-strong",
+    Draft: "bg-[var(--color-status-neutral-soft)] text-ink-soft",
+    Published: "bg-[var(--color-status-good-soft)] text-[var(--color-status-good)]",
     Closed: "bg-ink/10 text-ink-soft",
   };
   return (
