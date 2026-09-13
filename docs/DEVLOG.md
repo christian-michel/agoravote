@@ -1154,3 +1154,48 @@ mais **pas un test du `Dockerfile` lui-même** (syntaxe Docker, layers,
    environnement).
 2. Reste de la liste de l'itération 9 (reconfirmer le schéma ed25519,
    `chain-query`, `GET /campaigns`, etc.) — inchangée, non reprise ici.
+
+## Itération 11 — ports hôte Docker personnalisables
+
+Objectif : le porteur de projet a signalé un conflit de port lors de
+`./install.sh` sur sa machine (ports 3000/8080 déjà utilisés par
+d'autres services locaux). `docker-compose.yml` codait ces deux ports
+hôte en dur, obligeant jusqu'ici à éditer directement ce fichier — la
+doc existante (`docs/DOCKER.md`, "Changer le port") suggérait même
+`"8080:3000"` pour l'API, qui serait entrée en collision avec le port
+8080 déjà réservé au frontend dans ce même fichier (bug repéré en
+corrigeant cette section).
+
+### Correctif
+
+`docker-compose.yml` : ports hôte remplacés par
+`${AGORAVOTE_API_PORT:-3000}` et `${AGORAVOTE_FRONTEND_PORT:-8080}` —
+même patron que `POSTGRES_PASSWORD` déjà présent dans ce fichier. Les
+ports *conteneur* (3000 pour le binaire `agoravote-api`, 80 pour
+Nginx) ne changent jamais, seuls les ports hôte (ceux qu'on ouvre dans
+un navigateur) sont personnalisables. Nouveau fichier `.env.example`
+(à copier en `.env`, déjà dans `.gitignore`) documentant ces deux
+variables. `install.sh` source ce `.env` s'il existe (`docker compose`
+le fait déjà nativement pour interpoler `docker-compose.yml`, mais un
+script bash simple ne le fait pas automatiquement) pour afficher les
+bonnes URLs en fin d'installation — corrige au passage un vrai manque
+préexistant : le message final ne mentionnait jamais l'URL du
+frontend (8080), seulement celle de l'API.
+
+### Ce qui a été vérifié concrètement
+
+`docker compose config` (avec puis sans `.env` présent) confirme que
+les ports publiés résolvent correctement vers les valeurs
+personnalisées et vers les valeurs par défaut (3000/8080) selon les
+cas — vérifié dans cet environnement en démarrant `dockerd`
+manuellement (le démon n'est pas actif par défaut ici, mais peut
+l'être démarré ; Docker Hub, lui, reste hors d'atteinte réseau, cf.
+itération 10). `bash -n install.sh` confirme la syntaxe du script
+modifié.
+
+### Prochaines itérations candidates (mise à jour)
+
+1. Confirmer avec le porteur de projet que `./install.sh` avec un
+   `.env` personnalisé (ports non conflictuels sur sa machine) aboutit
+   bien jusqu'au bout.
+2. Reste des listes des itérations 9 et 10, inchangées.

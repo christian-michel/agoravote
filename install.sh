@@ -67,6 +67,22 @@ cd "$SCRIPT_DIR"
 echo "${C_BOLD}=== Installation d'AgoraVote ===${C_RESET}"
 echo
 
+# `docker compose` lit automatiquement un `.env` à la racine pour
+# résoudre les `${...}` de `docker-compose.yml` (AGORAVOTE_API_PORT,
+# AGORAVOTE_FRONTEND_PORT — cf. .env.example et docs/DOCKER.md,
+# "Changer le port") ; ce script bash, lui, ne le fait pas
+# automatiquement — on le source ici pour que les URLs affichées
+# ci-dessous correspondent réellement aux ports utilisés, y compris
+# quand ils ont été personnalisés pour éviter un conflit.
+if [ -f .env ]; then
+    set -a
+    # shellcheck disable=SC1091
+    source .env
+    set +a
+fi
+API_PORT="${AGORAVOTE_API_PORT:-3000}"
+FRONTEND_PORT="${AGORAVOTE_FRONTEND_PORT:-8080}"
+
 # --- 1. Docker Engine ------------------------------------------------------
 if command -v docker &>/dev/null; then
     ok "Docker est déjà installé ($(docker --version))."
@@ -144,7 +160,7 @@ $DOCKER_CMD compose up -d
 info "Attente que l'API réponde sur /health..."
 MAX_ATTEMPTS=30
 attempt=0
-until curl --fail --silent --output /dev/null http://localhost:3000/health 2>/dev/null; do
+until curl --fail --silent --output /dev/null "http://localhost:${API_PORT}/health" 2>/dev/null; do
     attempt=$((attempt + 1))
     if [ "$attempt" -ge "$MAX_ATTEMPTS" ]; then
         error "L'API ne répond toujours pas après ${MAX_ATTEMPTS} tentatives (~${MAX_ATTEMPTS}0s)."
@@ -158,11 +174,12 @@ done
 echo
 ok "AgoraVote est démarré et répond correctement."
 echo
-echo "  ${C_BOLD}API${C_RESET}      : http://localhost:3000"
-echo "  ${C_BOLD}Santé${C_RESET}    : http://localhost:3000/health"
-echo "  ${C_BOLD}Modules${C_RESET}  : http://localhost:3000/modules"
-echo "  ${C_BOLD}Logs${C_RESET}     : $DOCKER_CMD compose logs -f api"
-echo "  ${C_BOLD}Arrêt${C_RESET}    : $DOCKER_CMD compose down"
+echo "  ${C_BOLD}Application${C_RESET} : http://localhost:${FRONTEND_PORT}"
+echo "  ${C_BOLD}API${C_RESET}         : http://localhost:${API_PORT}"
+echo "  ${C_BOLD}Santé${C_RESET}       : http://localhost:${API_PORT}/health"
+echo "  ${C_BOLD}Modules${C_RESET}     : http://localhost:${API_PORT}/modules"
+echo "  ${C_BOLD}Logs${C_RESET}        : $DOCKER_CMD compose logs -f api"
+echo "  ${C_BOLD}Arrêt${C_RESET}       : $DOCKER_CMD compose down"
 echo
 echo "Voir README.md pour un parcours de démonstration complet (créer une"
 echo "campagne, voter, dépouiller) et docs/DOCKER.md pour le dépannage."

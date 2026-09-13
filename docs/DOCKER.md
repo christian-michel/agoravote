@@ -153,13 +153,28 @@ utile que si vous n'avez plus aucun usage de Docker par ailleurs.
 
 ## Changer le port
 
-Par défaut, l'API est exposée sur `localhost:3000`. Si ce port est
-déjà pris sur votre machine, modifiez `docker-compose.yml` :
+Par défaut, l'API est exposée sur `localhost:3000` et le frontend sur
+`localhost:8080`. Si l'un de ces ports est déjà pris sur votre machine
+(`port is already allocated`), pas besoin de modifier
+`docker-compose.yml` : créez un fichier `.env` à la racine du dépôt
+(copie de `.env.example`, jamais committé) et fixez-y le port hôte de
+votre choix, par exemple :
 
-```yaml
-    ports:
-      - "8080:3000"   # accès via http://localhost:8080
+```bash
+cp .env.example .env
 ```
+
+```ini
+# .env
+AGORAVOTE_API_PORT=4000
+AGORAVOTE_FRONTEND_PORT=4080
+```
+
+Puis relancez `docker compose up -d` (ou `./install.sh`) : l'API sera
+accessible sur `http://localhost:4000` et le frontend sur
+`http://localhost:4080`. Les ports *conteneur* (3000 pour l'API, 80
+pour le frontend) ne changent jamais, eux — seul le port hôte, celui
+que vous ouvrez dans un navigateur, est personnalisable.
 
 ## Dépannage
 
@@ -167,7 +182,7 @@ déjà pris sur votre machine, modifiez `docker-compose.yml` :
 |---|---|---|
 | `install.sh` échoue à "Le service Docker répond" | Le service Docker n'est pas démarré | `sudo systemctl start docker`, relancer `install.sh` |
 | `permission denied` sur `docker` sans `sudo` | Votre utilisateur ne fait pas encore partie du groupe `docker` | Déconnectez-vous/reconnectez-vous après l'installation, ou `newgrp docker` |
-| `port is already allocated` | Un autre programme utilise déjà le port 3000 | Changez le port dans `docker-compose.yml` (voir ci-dessus) |
+| `port is already allocated` | Un autre programme (ou un autre projet Docker) utilise déjà le port 3000 et/ou 8080 sur votre machine | Fixez `AGORAVOTE_API_PORT`/`AGORAVOTE_FRONTEND_PORT` dans un fichier `.env` (voir "Changer le port" ci-dessus) — vérifiez aussi `docker ps -a` : un ancien conteneur (d'AgoraVote ou d'un autre projet) peut retenir le port même arrêté |
 | Le conteneur redémarre en boucle | Voir les logs pour l'erreur exacte | `docker compose logs api` |
 | `curl: (7) Failed to connect` juste après le démarrage | Le serveur met parfois 1-2s à démarrer | `install.sh` gère déjà cette attente ; en usage manuel, patientez puis réessayez |
 | `api` reste "unhealthy" / redémarre en boucle, `db` semble démarré | `api` a démarré avant que `db` accepte des connexions | Normalement empêché par `depends_on: condition: service_healthy` ; vérifier `docker compose logs db` |
