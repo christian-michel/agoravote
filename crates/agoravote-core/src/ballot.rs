@@ -101,4 +101,52 @@ impl Ballot {
             cast_at: Utc::now(),
         }
     }
+
+    /// Construit un bulletin pour une question `Number`/`Scale`
+    /// (§6.2) : une valeur numérique unique, pas un score par option
+    /// (cf. `for_scores` ci-dessus, qui répond à un besoin différent —
+    /// noter chaque option d'une liste).
+    pub fn for_numeric(
+        campaign_id: Id,
+        question_id: Id,
+        voter_id: Option<Id>,
+        numeric_value: f64,
+    ) -> Self {
+        Self {
+            id: Id::new_v4(),
+            campaign_id,
+            question_id,
+            voter_id,
+            selections: Vec::new(),
+            scores: None,
+            numeric_value: Some(numeric_value),
+            text_value: None,
+            cast_at: Utc::now(),
+        }
+    }
+
+    /// Construit un bulletin pour une question `Text` (réponse
+    /// libre, §6.2). N'est délibérément jamais dépouillé par une
+    /// [`crate::voting_method::VotingMethod`] (aucune méthode de vote
+    /// ne sait "gagner" pour une réponse libre) : ce bulletin est
+    /// consulté tel quel, comme donnée brute — cf. §5.1 sur la
+    /// distinction entre réponse brute et résultat calculé.
+    pub fn for_text(
+        campaign_id: Id,
+        question_id: Id,
+        voter_id: Option<Id>,
+        text_value: String,
+    ) -> Self {
+        Self {
+            id: Id::new_v4(),
+            campaign_id,
+            question_id,
+            voter_id,
+            selections: Vec::new(),
+            scores: None,
+            numeric_value: None,
+            text_value: Some(text_value),
+            cast_at: Utc::now(),
+        }
+    }
 }

@@ -1,49 +1,66 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import { api, ApiError, type ResultSet } from "../api/client";
+import { api, ApiError, type Question, type QuestionResponses, type ResultSet } from "../api/client";
 import { Alert, Card } from "../components/ui";
 import { BarList, Donut, ParticipationGauge } from "../components/charts";
+import { ResponsesView } from "../components/ResponsesView";
 import { InfoIcon, ShareIcon } from "../components/icons";
 import { METHOD_COPY } from "../lib/methodCopy";
 
 export default function Results() {
   const { campaignId, questionId } = useParams<{ campaignId: string; questionId: string }>();
+  const [question, setQuestion] = useState<Question | null>(null);
   const [result, setResult] = useState<ResultSet | null>(null);
+  const [responses, setResponses] = useState<QuestionResponses | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [methodologyOpen, setMethodologyOpen] = useState(false);
 
+  // Le TYPE de la question détermine quelle route interroger : les
+  // questions à choix passent par /results (dépouillement par méthode
+  // de vote) ; les autres par /responses (réponses brutes + résumé
+  // descriptif, cf. `dto::QuestionResponses`) — récupérer la question
+  // d'abord (via le formulaire) pour savoir laquelle appeler, et pour
+  // résoudre les libellés d'options (l'identifiant brut d'une option,
+  // ex. "bleu-ciel", n'est pas fait pour être lu tel quel par un
+  // citoyen — cf. planche 5 du cahier des charges, qui montre des
+  // libellés lisibles, pas des identifiants).
   useEffect(() => {
     if (!campaignId || !questionId) return;
     setLoading(true);
-    api
-      .getResults(campaignId, questionId)
-      .then(setResult)
-      .catch((err) =>
-        setError(
-          err instanceof ApiError && err.status === 404
-            ? "Aucun résultat n'a encore été calculé pour cette question."
-            : "Impossible de charger les résultats.",
-        ),
-      )
-      .finally(() => setLoading(false));
+    setError(null);
+    (async () => {
+      try {
+        const form = await api.getForm(campaignId);
+        const q = form.questions.find((item) => item.id === questionId);
+        if (!q) {
+          setError("Cette question n'existe pas dans cette campagne.");
+          return;
+        }
+        setQuestion(q);
+
+        const isChoice =
+          q.question_type.type === "single_choice" || q.question_type.type === "multiple_choice";
+        if (isChoice) {
+          try {
+            setResult(await api.getResults(campaignId, questionId));
+          } catch (err) {
+            setError(
+              err instanceof ApiError && err.status === 404
+                ? "Aucun résultat n'a encore été calculé pour cette question."
+                : "Impossible de charger les résultats.",
+            );
+          }
+        } else {
+          setResponses(await api.getResponses(campaignId, questionId));
+        }
+      } catch (err) {
+        setError(err instanceof ApiError ? err.message : "Impossible de charger cette question.");
+      } finally {
+        setLoading(false);
+      }
+    })();
   }, [campaignId, questionId]);
-
-  if (loading) return <p className="text-sm text-muted">Chargement…</p>;
-  if (error || !result) {
-    return (
-      <div className="mx-auto max-w-md">
-        <Alert kind="error">{error}</Alert>
-      </div>
-    );
-  }
-
-  const sorted = Object.entries(result.outcome.percentages).sort(([, a], [, b]) => b - a);
-  const expressedRate =
-    result.outcome.total_ballots > 0
-      ? (result.outcome.valid_ballots / result.outcome.total_ballots) * 100
-      : 0;
-  const method = METHOD_COPY[result.voting_method_id];
 
   async function handleShare() {
     if (navigator.share) {
@@ -53,13 +70,57 @@ export default function Results() {
     }
   }
 
+  if (loading) return <p className="text-sm text-muted">Chargement…</p>;
+  if (error || !question) {
+    return (
+      <div className="mx-auto max-w-md">
+        <Alert kind="error">{error}</Alert>
+      </div>
+    );
+  }
+
+  // --- Types sans méthode de dépouillement : réponses brutes ---
+  if (!result) {
+    return (
+      <div className="mx-auto flex max-w-3xl flex-col gap-6">
+        <div>
+          <p className="text-xs font-medium uppercase tracking-wide text-muted">Résultats en direct</p>
+          <h1 className="mt-1 text-2xl font-semibold text-ink">{question.prompt.fr}</h1>
+        </div>
+        <Card>
+          {responses ? (
+            <ResponsesView responses={responses} questionType={question.question_type} />
+          ) : (
+            <p className="text-sm text-muted">Aucune réponse pour le moment.</p>
+          )}
+        </Card>
+      </div>
+    );
+  }
+
+  // --- Choix unique/multiple : résultat calculé par méthode de vote ---
+  const optionLabels: Record<string, string> =
+    "options" in question.question_type
+      ? Object.fromEntries(question.question_type.options.map((o) => [o.id, o.labels.fr]))
+      : {};
+  const label = (optionId: string) => optionLabels[optionId] ?? optionId;
+
+  const sorted = Object.entries(result.outcome.percentages).sort(([, a], [, b]) => b - a);
+  const expressedRate =
+    result.outcome.total_ballots > 0
+      ? (result.outcome.valid_ballots / result.outcome.total_ballots) * 100
+      : 0;
+  const method = METHOD_COPY[result.voting_method_id];
+
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-6">
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="text-xs font-medium uppercase tracking-wide text-muted">Résultats en direct</p>
           <h1 className="mt-1 text-2xl font-semibold text-ink">
-            {result.outcome.winners.length > 0 ? result.outcome.winners.join(", ") : "Aucun gagnant"}
+            {result.outcome.winners.length > 0
+              ? result.outcome.winners.map(label).join(", ")
+              : "Aucun gagnant"}
           </h1>
         </div>
         <button
@@ -81,7 +142,7 @@ export default function Results() {
         </Card>
         <Card>
           <Donut
-            slices={sorted.map(([option, pct]) => ({ key: option, label: option, value: pct }))}
+            slices={sorted.map(([option, pct]) => ({ key: option, label: label(option), value: pct }))}
           />
         </Card>
       </div>
@@ -92,7 +153,7 @@ export default function Results() {
           <BarList
             items={sorted.map(([option, pct]) => ({
               key: option,
-              label: option,
+              label: label(option),
               value: pct,
               highlighted: result.outcome.winners.includes(option),
             }))}

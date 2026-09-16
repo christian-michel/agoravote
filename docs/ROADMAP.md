@@ -50,9 +50,11 @@ coché — l'historique de ce qui a été priorisé et quand a de la valeur.
       précis (`owner_id`), pas à "tout Organizer de l'organisation".
 - [ ] Flux d'invitation d'organisateurs — aujourd'hui, `/auth/register`
       attribue directement le rôle `Organizer` à quiconque s'inscrit.
-- [ ] Validation bulletin ↔ type de question à la soumission (un
-      bulletin `scores` sur une question `single_choice` n'est
-      aujourd'hui filtré qu'au dépouillement, pas refusé à l'entrée).
+- [x] Validation bulletin ↔ type de question à la soumission. Fait —
+      cf. `docs/DEVLOG.md` itération 12 : `cast_ballot` valide
+      désormais le bulletin contre le type réel de la question
+      (bornes min/max, longueur max, permutation complète pour un
+      classement) avant construction.
 - [ ] Journal d'audit (`AuditEvent`, déjà défini dans
       `agoravote-core`) réellement émis par les handlers et persisté.
 - [ ] Méthode de vote avancée supplémentaire — candidate proposée :
@@ -61,11 +63,17 @@ coché — l'historique de ce qui a été priorisé et quand a de la valeur.
       utilisable comme oracle de test).
 - [ ] Export CSV/JSON dédié des résultats (§14 du cahier des charges) —
       aujourd'hui seul le JSON brut de l'API est disponible.
-- [ ] Câbler `agoravote-stats` (moyenne/médiane/écart-type/tableau
-      croisé) à une route API — dépendance déclarée mais jamais
-      utilisée par aucune route (vérifié par recherche dans le code,
-      cf. `docs/DEVLOG.md` itération 7), nécessaire pour enrichir
-      l'écran Analyse du frontend sans donnée fictive.
+- [x] Câbler `agoravote-stats` (moyenne/médiane/écart-type) à une
+      route API. Fait pour les questions nombre/échelle — cf.
+      `docs/DEVLOG.md` itération 12 (`GET .../responses`, statistiques
+      descriptives réelles). Reste à faire : tableau croisé, et
+      utilisation de ces statistiques par l'écran Analyse du frontend
+      (toujours sur donnée fictive pour cette partie).
+- [ ] Câbler `voting.score` (implémenté et testé dans
+      `agoravote-voting`, cf. `docs/DEVLOG.md` itération 12) à un
+      chemin HTTP réel — aucun `QuestionType` actuel ne produit de
+      bulletin `scores`, nécessiterait un type "notation par option"
+      absent du modèle, décision produit avant travail technique.
 - [ ] Attributs démographiques optionnels sur la participation (âge,
       territoire...), si le projet veut les comparaisons par groupe de
       la planche 6 — décision produit sur la collecte de ces données
@@ -85,6 +93,14 @@ coché — l'historique de ce qui a été priorisé et quand a de la valeur.
 - [x] Types de question au-delà de choix unique/multiple dans le
       constructeur de formulaire (texte, nombre, échelle, classement —
       déjà supportés côté API). Fait — cf. `docs/DEVLOG.md` itération 7.
+- [x] Vote et affichage des résultats pour texte/nombre/échelle/
+      classement (le constructeur de formulaire de l'itération 7 les
+      rendait créables mais pas votables — écran de vote sans UI de
+      saisie, aucune méthode de dépouillement applicable). Fait — cf.
+      `docs/DEVLOG.md` itération 12 : UI de saisie par type dans
+      `Vote.tsx`, nouvelle distinction réponses brutes (`ResponsesView`/
+      `ResponsesPanel`) vs résultat calculé (`TallyPanel`, choix
+      unique/multiple uniquement).
 - [ ] Écran de permissions/audit une fois le backend correspondant fait.
 - [ ] Affichage multilingue de l'interface elle-même (le contenu des
       campagnes l'est déjà côté modèle — `prompt`/`labels` par langue

@@ -200,7 +200,7 @@ compilation TypeScript plutôt qu'en bug silencieux à l'exécution.
 | `src/components/charts.tsx` | Jauge de participation, liste à barres, donut — SVG inline, palette de la skill dataviz (cf. `index.css`) |
 | `src/components/icons.tsx` | Icônes trait dessinées à la main (pas de dépendance externe) |
 | `src/components/FormBuilder.tsx` | Bibliothèque de questions (six types déjà acceptés par l'API) + canevas |
-| `src/components/` (autres) | UI de base (`ui.tsx`), panneau de dépouillement (`TallyPanel.tsx`) |
+| `src/components/` (autres) | UI de base (`ui.tsx`), panneau de dépouillement — choix unique/multiple (`TallyPanel.tsx`) —, panneau/vue de réponses brutes — texte/nombre/échelle/classement (`ResponsesPanel.tsx`/`ResponsesView.tsx`, itération 12) |
 | `src/pages/` | Un fichier par écran (cf. `frontend/README.md` pour la table complète) — inclut depuis l'itération 7 `CampaignsList.tsx`, `ModulesPage.tsx` et `Analysis.tsx`, et depuis l'itération 8 `G1Login.tsx` (planche 17 de l'addendum, `/connexion-g1`) |
 | `src/lib/methodCopy.ts` | Libellés/descriptions éditoriales des méthodes de vote natives, partagés entre `ModulesPage` et `TallyPanel` |
 | `DESIGN.md` | Direction visuelle et sa justification |

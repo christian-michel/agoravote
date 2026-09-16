@@ -18,6 +18,7 @@ export type User = components["schemas"]["User"];
 export type ModuleManifest = components["schemas"]["ModuleManifest"];
 export type CreateQuestionRequest = components["schemas"]["CreateQuestionRequest"];
 export type G1ChallengeResponse = components["schemas"]["G1ChallengeResponse"];
+export type QuestionResponses = components["schemas"]["QuestionResponses"];
 
 /**
  * En développement, Vite proxifie `/api/*` vers `http://localhost:3000`
@@ -147,7 +148,12 @@ export const api = {
   castBallot: (
     campaignId: string,
     questionId: string,
-    body: { selections?: string[]; scores?: Record<string, number> },
+    body: {
+      selections?: string[];
+      scores?: Record<string, number>;
+      numeric_value?: number;
+      text_value?: string;
+    },
     anonymous = false,
   ) =>
     request<Ballot>(`/campaigns/${campaignId}/questions/${questionId}/ballots`, {
@@ -168,4 +174,9 @@ export const api = {
 
   getResults: (campaignId: string, questionId: string) =>
     request<ResultSet>(`/campaigns/${campaignId}/questions/${questionId}/results`),
+
+  /** Texte/Nombre/Échelle/Classement — cf. `dto::QuestionResponses` côté API :
+   * pas de dépouillement par méthode de vote, toujours "en direct". */
+  getResponses: (campaignId: string, questionId: string) =>
+    request<QuestionResponses>(`/campaigns/${campaignId}/questions/${questionId}/responses`),
 };

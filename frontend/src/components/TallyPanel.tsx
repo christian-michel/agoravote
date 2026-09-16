@@ -62,6 +62,11 @@ export function TallyPanel({
     "options" in question.question_type
       ? (question.question_type.options as { id: string; labels: Record<string, string> }[])
       : [];
+  // Les résultats calculés (`percentages`/`winners`) sont indexés par
+  // ID d'option brut (ex. "bleu-ciel"), pas fait pour être lu tel quel
+  // par une organisatrice — cf. Results.tsx, même correction.
+  const optionLabel = (optionId: string) =>
+    options.find((o) => o.id === optionId)?.labels.fr ?? optionId;
 
   return (
     <Card>
@@ -162,7 +167,7 @@ export function TallyPanel({
                 .sort(([, a], [, b]) => b - a)
                 .map(([option, pct]) => ({
                   key: option,
-                  label: option,
+                  label: optionLabel(option),
                   value: pct,
                   highlighted: result.outcome.winners.includes(option),
                 }))}

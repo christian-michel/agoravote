@@ -40,17 +40,81 @@ pub struct CreateQuestionRequest {
 }
 
 /// Corps de requête : soumission d'un bulletin (écran "09. Vote
-/// citoyen", §10.1). On accepte soit une liste de sélections (choix
-/// unique/multiple/classement), soit une table de scores (vote par
-/// score) — jamais les deux à la fois, cf. validation dans le handler.
+/// citoyen", §10.1). Lequel des quatre champs de données est
+/// pertinent dépend du [`QuestionType`] de la question répondue — le
+/// handler (`routes.rs::cast_ballot`) relit ce type pour choisir le
+/// bon champ et valider son contenu (bornes, longueur, classement
+/// complet), plutôt que de faire confiance au client sur quel champ a
+/// été rempli.
 #[derive(Debug, Deserialize, Default)]
 pub struct CastBallotRequest {
     #[serde(default)]
     pub voter_id: Option<Id>,
+    /// `SingleChoice`/`MultipleChoice` (id de la ou des options
+    /// choisies) ou `Ranking` (ids de toutes les options, dans
+    /// l'ordre de préférence).
     #[serde(default)]
     pub selections: Vec<String>,
+    /// Réservé pour `voting.score` (§8.2, déjà implémenté dans
+    /// `agoravote-voting` et testé, cf. son crate), jamais encore
+    /// câblé à un `QuestionType` : aucune question ne produit
+    /// aujourd'hui de bulletin avec ce champ rempli (cf.
+    /// `routes.rs::build_ballot`) — même statut que
+    /// `agoravote_store::Store::get_form`, gardé prêt plutôt que
+    /// supprimé. `#[allow(dead_code)]` : jamais lu par du code Rust
+    /// aujourd'hui, mais bien désérialisé (`Deserialize`) si un client
+    /// le fournit malgré tout — pas du code mort au sens propre.
     #[serde(default)]
+    #[allow(dead_code)]
     pub scores: Option<HashMap<String, f64>>,
+    /// `Number`/`Scale`.
+    #[serde(default)]
+    pub numeric_value: Option<f64>,
+    /// `Text`.
+    #[serde(default)]
+    pub text_value: Option<String>,
+}
+
+/// Réponse à `GET /campaigns/:id/questions/:qid/responses` — pour les
+/// types de question qu'aucune [`agoravote_voting::VotingMethod`] ne
+/// sait dépouiller (`Text`, `Number`/`Scale`, `Ranking`) : il n'y a
+/// pas de "gagnant" à calculer, seulement des réponses brutes à
+/// consulter telles quelles (§5.1) — pour `Number`/`Scale`, accompagnées
+/// d'un résumé statistique **descriptif** (`agoravote_stats`, cf. §6.2)
+/// explicitement distinct d'un résultat de vote (même principe que la
+/// séparation de crate `agoravote-stats`/`agoravote-voting`, cf. doc
+/// de `agoravote_stats`). Jamais utilisée pour `SingleChoice`/
+/// `MultipleChoice` (qui passent par `/tally` puis `/results`) — le
+/// handler renvoie une erreur explicite dans ce cas plutôt que de
+/// laisser deviner quelle route utiliser.
+#[derive(Debug, Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum QuestionResponses {
+    Text {
+        values: Vec<String>,
+    },
+    Numeric {
+        values: Vec<f64>,
+        summary: Option<NumericSummary>,
+    },
+    Ranking {
+        rankings: Vec<Vec<String>>,
+    },
+}
+
+/// Résumé statistique descriptif d'un ensemble de valeurs numériques
+/// (`Number`/`Scale`) — cf. `agoravote_stats::descriptive`. `None`
+/// pour chaque champ dès que l'échantillon est vide (cf. doc de ces
+/// fonctions : une moyenne/médiane/écart-type n'a pas de sens sur un
+/// ensemble vide, jamais renvoyée comme `0.0` qui serait trompeur).
+#[derive(Debug, Serialize)]
+pub struct NumericSummary {
+    pub count: usize,
+    pub mean: Option<f64>,
+    pub median: Option<f64>,
+    pub std_dev: Option<f64>,
+    pub min: Option<f64>,
+    pub max: Option<f64>,
 }
 
 /// Corps de requête : lancement d'un dépouillement (écran "06/11",

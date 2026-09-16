@@ -432,6 +432,34 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /campaigns/{campaignId}/questions/{questionId}/responses:
+    get:
+      tags: [results]
+      summary: >
+        Réponses brutes pour les types de question qu'aucune méthode de
+        vote ne dépouille (Texte, Nombre, Échelle, Classement) — public,
+        toujours "en direct" (pas d'étape /tally). Pour Choix
+        unique/Choix multiple, utiliser /tally puis /results à la place.
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/CampaignId"
+        - $ref: "#/components/parameters/QuestionId"
+      responses:
+        "200":
+          description: Réponses (et résumé statistique pour Nombre/Échelle)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QuestionResponses"
+        "400":
+          description: Question à choix (utiliser /tally + /results à la place)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
 components:
   securitySchemes:
     bearerAuth:
@@ -729,10 +757,59 @@ components:
         selections:
           type: array
           items: { type: string }
+          description: Choix unique/multiple (id de la ou des options) ou Classement (ids de toutes les options, dans l'ordre de préférence)
         scores:
           type: object
           additionalProperties: { type: number }
           nullable: true
+          description: Réservé pour une future méthode voting.score, non câblée à un type de question aujourd'hui — cf. dto.rs
+        numeric_value:
+          type: number
+          nullable: true
+          description: Nombre ou Échelle
+        text_value:
+          type: string
+          nullable: true
+          description: Texte libre
+
+    QuestionResponses:
+      description: >
+        Réponses brutes (et résumé statistique pour Nombre/Échelle) pour
+        les types de question qu'aucune méthode de vote ne dépouille —
+        cf. GET /campaigns/{campaignId}/questions/{questionId}/responses.
+      oneOf:
+        - type: object
+          required: [kind, values]
+          properties:
+            kind: { type: string, enum: [text] }
+            values: { type: array, items: { type: string } }
+        - type: object
+          required: [kind, values]
+          properties:
+            kind: { type: string, enum: [numeric] }
+            values: { type: array, items: { type: number } }
+            summary:
+              $ref: "#/components/schemas/NumericSummary"
+        - type: object
+          required: [kind, rankings]
+          properties:
+            kind: { type: string, enum: [ranking] }
+            rankings:
+              type: array
+              items: { type: array, items: { type: string } }
+      discriminator:
+        propertyName: kind
+
+    NumericSummary:
+      type: object
+      required: [count]
+      properties:
+        count: { type: integer }
+        mean: { type: number, nullable: true }
+        median: { type: number, nullable: true }
+        std_dev: { type: number, nullable: true }
+        min: { type: number, nullable: true }
+        max: { type: number, nullable: true }
 
     Ballot:
       type: object

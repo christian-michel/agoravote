@@ -4,6 +4,7 @@ import { api, ApiError, type Campaign, type Form, type ModuleManifest } from "..
 import { Alert, Button, Card, StatusBadge } from "../components/ui";
 import { FormBuilder } from "../components/FormBuilder";
 import { TallyPanel } from "../components/TallyPanel";
+import { ResponsesPanel } from "../components/ResponsesPanel";
 import { rememberCampaign } from "../lib/recentCampaigns";
 
 export default function CampaignManage() {
@@ -143,12 +144,17 @@ export default function CampaignManage() {
                   Ouvrir l'écran de vote citoyen →
                 </Link>
               )}
-              <TallyPanel
-                campaignId={campaignId}
-                question={question}
-                modules={modules}
-                canTally={campaign.status === "Published" || campaign.status === "Closed"}
-              />
+              {question.question_type.type === "single_choice" ||
+              question.question_type.type === "multiple_choice" ? (
+                <TallyPanel
+                  campaignId={campaignId}
+                  question={question}
+                  modules={modules}
+                  canTally={campaign.status === "Published" || campaign.status === "Closed"}
+                />
+              ) : (
+                <ResponsesPanel campaignId={campaignId} question={question} />
+              )}
             </div>
           ))}
         </div>

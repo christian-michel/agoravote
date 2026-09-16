@@ -23,6 +23,7 @@
 //! | `POST /campaigns/:id/questions/:qid/ballots`             | 09 Vote citoyen                   |
 //! | `POST /campaigns/:id/questions/:qid/tally`               | 06 Configuration du scrutin       |
 //! | `GET  /campaigns/:id/questions/:qid/results`             | 11 Résultats en direct            |
+//! | `GET  /campaigns/:id/questions/:qid/responses`            | 11 Résultats en direct (Texte/Nombre/Échelle/Classement, cf. `dto::QuestionResponses`) |
 //! | `GET  /modules`                                        | 16 Modules                        |
 //!
 //! ## Routes protégées (§13)
@@ -52,15 +53,16 @@ use tracing::Span;
 
 use agoravote_core::ballot::Ballot;
 use agoravote_core::campaign::Campaign;
-use agoravote_core::form::Form;
+use agoravote_core::form::{Form, Question};
 use agoravote_core::result::ResultSet;
 use agoravote_core::voting_method::VotingParams;
-use agoravote_core::{Account, G1Link, Id, User};
+use agoravote_core::{Account, G1Link, Id, QuestionType, User};
 
 use crate::auth::{require_organizer, AuthUser, OptionalAuthUser};
 use crate::dto::{
     AuthResponse, CastBallotRequest, CreateCampaignRequest, CreateFormRequest, ErrorResponse,
-    G1ChallengeResponse, G1VerifyRequest, LoginRequest, RegisterRequest, TallyRequest,
+    G1ChallengeResponse, G1VerifyRequest, LoginRequest, NumericSummary, QuestionResponses,
+    RegisterRequest, TallyRequest,
 };
 use crate::state::AppState;
 
@@ -105,6 +107,10 @@ pub fn build_router(state: AppState) -> Router {
         .route(
             "/campaigns/:campaign_id/questions/:question_id/results",
             get(get_results),
+        )
+        .route(
+            "/campaigns/:campaign_id/questions/:question_id/responses",
+            get(get_responses),
         )
         .with_state(state)
         // --- Observabilité (cf. docs/LOGGING.md pour le détail) ---
@@ -752,12 +758,24 @@ async fn cast_ballot(
         }
     }
 
-    let ballot = match req.scores {
-        Some(scores) if !scores.is_empty() => {
-            Ballot::for_scores(campaign_id, question_id, voter_id, scores)
-        }
-        _ => Ballot::for_selections(campaign_id, question_id, voter_id, req.selections),
-    };
+    // Détermine le champ pertinent (et sa validation) à partir du
+    // TYPE de la question, jamais en devinant selon quel champ du
+    // corps de requête est rempli — cf. doc de `CastBallotRequest` :
+    // un client ne doit pas pouvoir répondre par un champ qui ne
+    // correspond pas à la question (ex : un `text_value` sur une
+    // question `SingleChoice`), corrige l'écart documenté dans
+    // `docs/ROADMAP.md` ("validation bulletin ↔ type de question").
+    let question = find_question(&state, campaign_id, question_id)
+        .await?
+        .ok_or_else(|| not_found("question introuvable"))?;
+
+    let ballot = build_ballot(
+        campaign_id,
+        question_id,
+        voter_id,
+        &question.question_type,
+        req,
+    )?;
 
     state
         .store
@@ -765,6 +783,130 @@ async fn cast_ballot(
         .await
         .map_err(internal_error)?;
     Ok(Json(ballot))
+}
+
+/// Charge le formulaire d'une campagne et y cherche une question par
+/// id — factorisé car utilisé à la fois par `cast_ballot` et
+/// `get_responses`. `Ok(None)` si la campagne n'a pas de formulaire OU
+/// si la question n'y figure pas (le distinguo n'a pas d'importance
+/// pour l'appelant : dans les deux cas, la question n'existe pas).
+async fn find_question(
+    state: &AppState,
+    campaign_id: Id,
+    question_id: Id,
+) -> Result<Option<Question>, (StatusCode, Json<ErrorResponse>)> {
+    let Some(form) = state
+        .store
+        .form_for_campaign(campaign_id)
+        .await
+        .map_err(internal_error)?
+    else {
+        return Ok(None);
+    };
+    Ok(form.questions.into_iter().find(|q| q.id == question_id))
+}
+
+/// Construit et valide un bulletin conforme au type de la question
+/// répondue — cf. doc de `cast_ballot`. Les bornes déclarées sur la
+/// question (`max_length`, `min`/`max`) sont vérifiées ici : un
+/// bulletin qui les dépasse est refusé (400) plutôt qu'accepté et
+/// silencieusement faussé dans les statistiques calculées ensuite.
+fn build_ballot(
+    campaign_id: Id,
+    question_id: Id,
+    voter_id: Option<Id>,
+    question_type: &QuestionType,
+    req: CastBallotRequest,
+) -> Result<Ballot, (StatusCode, Json<ErrorResponse>)> {
+    match question_type {
+        // Choix unique/multiple : comportement inchangé depuis
+        // l'origine du projet — un bulletin à zéro ou plusieurs
+        // sélections reste structurellement accepté (c'est au
+        // dépouillement, pas ici, de l'écarter des suffrages exprimés
+        // — cf. `agoravote_voting::majority`, "vote nul").
+        QuestionType::SingleChoice { .. } | QuestionType::MultipleChoice { .. } => Ok(
+            Ballot::for_selections(campaign_id, question_id, voter_id, req.selections),
+        ),
+
+        // Classement : contrairement au choix unique/multiple, un
+        // classement partiel ou incohérent n'a pas de sens à
+        // conserver tel quel (aucune méthode de dépouillement ne
+        // pourrait raisonnablement l'interpréter) — exigé complet.
+        QuestionType::Ranking { options } => {
+            let expected: std::collections::BTreeSet<&str> =
+                options.iter().map(|o| o.id.as_str()).collect();
+            let provided: std::collections::BTreeSet<&str> =
+                req.selections.iter().map(|s| s.as_str()).collect();
+            if expected != provided || req.selections.len() != options.len() {
+                return Err(bad_request(
+                    "le classement doit contenir exactement les options de la question, chacune une seule fois",
+                ));
+            }
+            Ok(Ballot::for_selections(
+                campaign_id,
+                question_id,
+                voter_id,
+                req.selections,
+            ))
+        }
+
+        QuestionType::Text { max_length } => {
+            let text = req
+                .text_value
+                .ok_or_else(|| bad_request("réponse textuelle requise pour cette question"))?;
+            if let Some(max_length) = max_length {
+                if text.chars().count() > *max_length as usize {
+                    return Err(bad_request(&format!(
+                        "réponse trop longue (maximum {max_length} caractères)"
+                    )));
+                }
+            }
+            Ok(Ballot::for_text(campaign_id, question_id, voter_id, text))
+        }
+
+        QuestionType::Number { min, max } => {
+            let value = req
+                .numeric_value
+                .ok_or_else(|| bad_request("valeur numérique requise pour cette question"))?;
+            if let Some(min) = min {
+                if value < *min {
+                    return Err(bad_request(&format!(
+                        "valeur inférieure au minimum ({min})"
+                    )));
+                }
+            }
+            if let Some(max) = max {
+                if value > *max {
+                    return Err(bad_request(&format!(
+                        "valeur supérieure au maximum ({max})"
+                    )));
+                }
+            }
+            Ok(Ballot::for_numeric(
+                campaign_id,
+                question_id,
+                voter_id,
+                value,
+            ))
+        }
+
+        QuestionType::Scale { min, max } => {
+            let value = req
+                .numeric_value
+                .ok_or_else(|| bad_request("valeur numérique requise pour cette question"))?;
+            if value < f64::from(*min) || value > f64::from(*max) {
+                return Err(bad_request(&format!(
+                    "valeur hors de l'échelle déclarée ({min} à {max})"
+                )));
+            }
+            Ok(Ballot::for_numeric(
+                campaign_id,
+                question_id,
+                voter_id,
+                value,
+            ))
+        }
+    }
 }
 
 /// `POST /campaigns/:id/questions/:qid/tally` — écran "06.
@@ -838,6 +980,79 @@ async fn get_results(
         .map_err(internal_error)?
         .map(Json)
         .ok_or_else(|| not_found("aucun résultat calculé pour cette question"))
+}
+
+/// `GET /campaigns/:id/questions/:qid/responses` — pendant de
+/// `/results` pour les types de question qu'aucune
+/// [`agoravote_voting::VotingMethod`] ne dépouille (`Text`,
+/// `Number`/`Scale`, `Ranking`) : cf. doc de
+/// [`crate::dto::QuestionResponses`]. Toujours "en direct" (pas
+/// d'étape `/tally` préalable à déclencher : il n'y a rien à calculer
+/// qui nécessite un choix de méthode, contrairement à `/results`) —
+/// public, comme `/results`, même si la campagne n'est pas encore
+/// clôturée (§3.2, cf. `get_results`/`get_form`).
+async fn get_responses(
+    State(state): State<AppState>,
+    Path((campaign_id, question_id)): Path<(Id, Id)>,
+) -> Result<Json<QuestionResponses>, (StatusCode, Json<ErrorResponse>)> {
+    let question = find_question(&state, campaign_id, question_id)
+        .await?
+        .ok_or_else(|| not_found("question introuvable"))?;
+
+    let ballots = state
+        .store
+        .ballots_for_question(campaign_id, question_id)
+        .await
+        .map_err(internal_error)?;
+
+    let response = match question.question_type {
+        QuestionType::SingleChoice { .. } | QuestionType::MultipleChoice { .. } => {
+            return Err(bad_request(
+                "cette question se dépouille via /tally puis /results, pas /responses",
+            ));
+        }
+        QuestionType::Text { .. } => QuestionResponses::Text {
+            values: ballots.into_iter().filter_map(|b| b.text_value).collect(),
+        },
+        QuestionType::Number { .. } | QuestionType::Scale { .. } => {
+            let values: Vec<f64> = ballots
+                .into_iter()
+                .filter_map(|b| b.numeric_value)
+                .collect();
+            let summary = numeric_summary(&values);
+            QuestionResponses::Numeric { values, summary }
+        }
+        QuestionType::Ranking { .. } => QuestionResponses::Ranking {
+            rankings: ballots
+                .into_iter()
+                .map(|b| b.selections)
+                .filter(|s| !s.is_empty())
+                .collect(),
+        },
+    };
+
+    Ok(Json(response))
+}
+
+/// Résumé statistique descriptif d'un échantillon — cf. doc de
+/// [`crate::dto::NumericSummary`]. `None` sur un échantillon vide
+/// (aucune réponse encore reçue) : chaque champ individuel reste déjà
+/// `None` dans ce cas via `agoravote_stats` (cf. sa doc), donc un
+/// simple relais, pas de logique propre à ce fichier.
+fn numeric_summary(values: &[f64]) -> Option<NumericSummary> {
+    if values.is_empty() {
+        return None;
+    }
+    let min = values.iter().cloned().fold(f64::INFINITY, f64::min);
+    let max = values.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+    Some(NumericSummary {
+        count: values.len(),
+        mean: agoravote_stats::descriptive::mean(values),
+        median: agoravote_stats::descriptive::median(values),
+        std_dev: agoravote_stats::descriptive::std_dev(values),
+        min: Some(min),
+        max: Some(max),
+    })
 }
 
 /// Construit une réponse `404` **et** journalise l'événement.
@@ -1530,5 +1745,309 @@ mod tests {
         )
         .await;
         assert_eq!(status, StatusCode::BAD_REQUEST);
+    }
+
+    // --- Types de question Texte/Nombre/Échelle/Classement ---
+    //
+    // Ces quatre types étaient créables dans un formulaire (itération
+    // 7, éditeur de formulaire) sans jamais pouvoir être réellement
+    // votés ni dépouillés (`Vote.tsx` ne rendait aucun champ de
+    // saisie pour eux ; `agoravote-voting` n'a aucune méthode qui sait
+    // les traiter) — écart trouvé en préparant un test de bout en
+    // bout avec l'utilisateur. Les tests ci-dessous couvrent le
+    // correctif : `build_ballot` (validation par type) et
+    // `get_responses` (§5.1, réponses brutes + résumé descriptif pour
+    // les types que `/tally` ne sait pas dépouiller).
+
+    /// Crée une organisatrice, une campagne publiée avec UNE question
+    /// du type donné (`question_json` = le corps `CreateQuestionRequest`
+    /// sans `prompt`/`required`, qui sont ajoutés ici), et renvoie
+    /// `(router, campaign_id, question_id)`. Factorisé car repris par
+    /// tous les tests ci-dessous, qui ne diffèrent que par le type de
+    /// question et les bulletins envoyés ensuite.
+    async fn setup_published_question(
+        question_json: serde_json::Value,
+    ) -> (Router, String, String) {
+        let router = test_router();
+        let organization_id = Id::new_v4();
+
+        let (_, body) = post_json(
+            &router,
+            "/auth/register",
+            serde_json::json!({
+                "organization_id": organization_id,
+                "email": format!("organisatrice-{}@example.test", Id::new_v4()),
+                "password": "un-mot-de-passe-suffisamment-long",
+                "display_name": "Organisatrice",
+            }),
+            None,
+        )
+        .await;
+        let token = body["token"].as_str().unwrap().to_string();
+
+        let (_, campaign) = post_json(
+            &router,
+            "/campaigns",
+            serde_json::json!({ "organization_id": organization_id, "title": "Test type de question" }),
+            Some(&token),
+        )
+        .await;
+        let campaign_id = campaign["id"].as_str().unwrap().to_string();
+
+        let mut question = question_json;
+        question["prompt"] = serde_json::json!("Question de test ?");
+        question["required"] = serde_json::json!(true);
+
+        let (_, form) = post_json(
+            &router,
+            &format!("/campaigns/{campaign_id}/form"),
+            serde_json::json!({ "questions": [question] }),
+            Some(&token),
+        )
+        .await;
+        let question_id = form["questions"][0]["id"].as_str().unwrap().to_string();
+
+        post_json(
+            &router,
+            &format!("/campaigns/{campaign_id}/publish"),
+            serde_json::Value::Null,
+            Some(&token),
+        )
+        .await;
+
+        (router, campaign_id, question_id)
+    }
+
+    #[tokio::test]
+    async fn vote_texte_est_enregistre_et_consultable_via_responses() {
+        let (router, campaign_id, question_id) = setup_published_question(serde_json::json!({
+            "type": "text",
+            "max_length": 200
+        }))
+        .await;
+
+        let (status, _) = post_json(
+            &router,
+            &format!("/campaigns/{campaign_id}/questions/{question_id}/ballots"),
+            serde_json::json!({ "text_value": "Ma réponse libre" }),
+            None,
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+
+        let (status, body) = post_json(
+            &router,
+            &format!("/campaigns/{campaign_id}/questions/{question_id}/ballots"),
+            serde_json::json!({ "selections": ["a"] }), // mauvais champ pour ce type
+            None,
+        )
+        .await;
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+        assert!(body["error"]
+            .as_str()
+            .unwrap()
+            .contains("réponse textuelle requise"));
+
+        let response = router
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri(format!(
+                        "/campaigns/{campaign_id}/questions/{question_id}/responses"
+                    ))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let responses: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(responses["kind"], "text");
+        assert_eq!(responses["values"], serde_json::json!(["Ma réponse libre"]));
+    }
+
+    #[tokio::test]
+    async fn vote_texte_trop_long_est_refuse() {
+        let (router, campaign_id, question_id) = setup_published_question(serde_json::json!({
+            "type": "text",
+            "max_length": 5
+        }))
+        .await;
+
+        let (status, body) = post_json(
+            &router,
+            &format!("/campaigns/{campaign_id}/questions/{question_id}/ballots"),
+            serde_json::json!({ "text_value": "beaucoup trop long" }),
+            None,
+        )
+        .await;
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+        assert!(body["error"].as_str().unwrap().contains("trop longue"));
+    }
+
+    #[tokio::test]
+    async fn vote_nombre_respecte_les_bornes_declarees() {
+        let (router, campaign_id, question_id) = setup_published_question(serde_json::json!({
+            "type": "number",
+            "min": 0.0,
+            "max": 10.0
+        }))
+        .await;
+
+        let (status, _) = post_json(
+            &router,
+            &format!("/campaigns/{campaign_id}/questions/{question_id}/ballots"),
+            serde_json::json!({ "numeric_value": 7.0 }),
+            None,
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+
+        let (status, body) = post_json(
+            &router,
+            &format!("/campaigns/{campaign_id}/questions/{question_id}/ballots"),
+            serde_json::json!({ "numeric_value": 42.0 }),
+            None,
+        )
+        .await;
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+        assert!(body["error"]
+            .as_str()
+            .unwrap()
+            .contains("supérieure au maximum"));
+    }
+
+    #[tokio::test]
+    async fn vote_echelle_calcule_un_resume_statistique_correct() {
+        let (router, campaign_id, question_id) = setup_published_question(serde_json::json!({
+            "type": "scale",
+            "min": 1,
+            "max": 5
+        }))
+        .await;
+
+        for value in [1.0, 3.0, 5.0] {
+            let (status, _) = post_json(
+                &router,
+                &format!("/campaigns/{campaign_id}/questions/{question_id}/ballots"),
+                serde_json::json!({ "numeric_value": value }),
+                None,
+            )
+            .await;
+            assert_eq!(status, StatusCode::OK);
+        }
+
+        // Hors échelle (0 < min=1) : refusé, ne doit pas polluer la
+        // moyenne calculée ci-dessous.
+        let (status, _) = post_json(
+            &router,
+            &format!("/campaigns/{campaign_id}/questions/{question_id}/ballots"),
+            serde_json::json!({ "numeric_value": 0.0 }),
+            None,
+        )
+        .await;
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+
+        let response = router
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri(format!(
+                        "/campaigns/{campaign_id}/questions/{question_id}/responses"
+                    ))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let responses: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(responses["kind"], "numeric");
+        assert_eq!(responses["summary"]["count"], 3);
+        // (1 + 3 + 5) / 3 = 3.0 exactement, pas d'approximation à tolérer.
+        assert_eq!(responses["summary"]["mean"], 3.0);
+        assert_eq!(responses["summary"]["median"], 3.0);
+        assert_eq!(responses["summary"]["min"], 1.0);
+        assert_eq!(responses["summary"]["max"], 5.0);
+    }
+
+    #[tokio::test]
+    async fn classement_exige_toutes_les_options_une_seule_fois() {
+        let (router, campaign_id, question_id) = setup_published_question(serde_json::json!({
+            "type": "ranking",
+            "options": [
+                {"id": "a", "labels": {"fr": "A"}},
+                {"id": "b", "labels": {"fr": "B"}},
+                {"id": "c", "labels": {"fr": "C"}},
+            ]
+        }))
+        .await;
+
+        // Classement partiel : refusé.
+        let (status, _) = post_json(
+            &router,
+            &format!("/campaigns/{campaign_id}/questions/{question_id}/ballots"),
+            serde_json::json!({ "selections": ["a", "b"] }),
+            None,
+        )
+        .await;
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+
+        // Classement complet, valide.
+        let (status, _) = post_json(
+            &router,
+            &format!("/campaigns/{campaign_id}/questions/{question_id}/ballots"),
+            serde_json::json!({ "selections": ["c", "a", "b"] }),
+            None,
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+
+        let response = router
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri(format!(
+                        "/campaigns/{campaign_id}/questions/{question_id}/responses"
+                    ))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let responses: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(responses["kind"], "ranking");
+        assert_eq!(responses["rankings"], serde_json::json!([["c", "a", "b"]]));
+    }
+
+    #[tokio::test]
+    async fn responses_refuse_les_questions_a_choix() {
+        let (router, campaign_id, question_id) = setup_published_question(serde_json::json!({
+            "type": "single_choice",
+            "options": [{"id": "a", "labels": {"fr": "A"}}]
+        }))
+        .await;
+
+        let response = router
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri(format!(
+                        "/campaigns/{campaign_id}/questions/{question_id}/responses"
+                    ))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     }
 }

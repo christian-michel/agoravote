@@ -1199,3 +1199,146 @@ modifié.
    `.env` personnalisé (ports non conflictuels sur sa machine) aboutit
    bien jusqu'au bout.
 2. Reste des listes des itérations 9 et 10, inchangées.
+
+## Itération 12 — test de bout en bout (30 profils, 18 campagnes) et complétion des 4 types de question restants
+
+Objectif : le porteur de projet a demandé un test de bout en bout
+grandeur réelle — créer 30 comptes réels, 3 campagnes par type de
+question (6 types × 3 = 18), faire répondre les autres inscrit·e·s,
+afficher les résultats, capturer des écrans à chaque étape, et
+vérifier la conformité au cahier des charges et aux maquettes ainsi
+que la justesse mathématique de chaque résultat.
+
+### Découverte en cours de test
+
+En construisant un scénario couvrant les 6 `QuestionType`
+(`single_choice`, `multiple_choice`, `text`, `number`, `scale`,
+`ranking`), il est apparu que seuls les deux premiers étaient
+réellement utilisables de bout en bout : `Vote.tsx` n'avait aucune UI
+de saisie pour texte/nombre/échelle/classement (ces types étaient
+créables dans le constructeur de formulaire depuis l'itération 7, mais
+pas votables), et `agoravote-voting` n'a que trois méthodes
+(`voting.majority`, `voting.approval`, `voting.score`) — aucune ne
+convient à une question de type texte ou classement, et `voting.score`
+n'était atteignable par aucun `QuestionType` réel.
+
+Conformément à la règle du projet ("jamais de code non testé présenté
+comme fonctionnel"), ceci a été signalé au porteur de projet plutôt
+que contourné silencieusement. Décision prise avec lui : implémenter
+complètement ces 4 types plutôt que réduire le scope du test.
+Périmètre convenu, en cohérence avec le cahier des charges §5.1
+("les réponses brutes doivent être distinguables des résultats
+calculés") et le fait que le vote préférentiel (Condorcet/STV,
+seul algorithme pertinent pour un classement) est explicitement hors
+MVP (§2.2) :
+
+- **Nombre / Échelle** : bulletin réel + statistiques descriptives
+  réelles (moyenne, médiane, écart-type) via `agoravote-stats`,
+  jusqu'ici une dépendance déclarée mais jamais utilisée par
+  `agoravote-api`.
+- **Texte / Classement** : bulletin réel, mais **aucun résultat
+  calculé** — affichage des réponses brutes uniquement (pas de
+  "gagnant" pour un classement sans algorithme de vote préférentiel
+  implémenté ; pas de résumé statistique pertinent pour du texte
+  libre).
+
+### Ce qui a changé
+
+Backend :
+- `Ballot::for_numeric` et `Ballot::for_text` (nouveaux constructeurs,
+  `crates/agoravote-core/src/ballot.rs`), en complément des
+  `for_selections`/`for_scores` déjà existants.
+- `CastBallotRequest` étendu (`numeric_value`, `text_value`) ;
+  `cast_ballot` réécrit pour valider le bulletin **contre le type réel
+  de la question** (bornes min/max, longueur max, permutation complète
+  pour un classement) avant de construire le `Ballot` — corrige au
+  passage un item de `docs/ROADMAP.md` ("Validation bulletin ↔ type de
+  question à la soumission").
+- Nouvelle route `GET /campaigns/:id/questions/:id/responses` :
+  réponses brutes, distincte de `/tally` + `/results` (résultat
+  calculé) — cf. cahier des charges §5.1 cité plus haut. Pour
+  texte/classement, seule voie d'accès aux réponses (aucune méthode de
+  vote ne s'applique) ; pour nombre/échelle, complète `/results` avec
+  le détail des valeurs individuelles en plus du résumé statistique.
+- Le champ `scores` de `CastBallotRequest` devient du code mort réel
+  (aucun `QuestionType` ne produit de bulletin `scores` via l'API,
+  `voting.score` restant un module complet mais non câblé) — marqué
+  `#[allow(dead_code)]` avec commentaire, plutôt que supprimé : c'est
+  une fonctionnalité MVP légitime (§8.2), déjà implémentée et testée
+  dans `agoravote-voting`, simplement pas encore reliée à une route
+  HTTP (lacune préexistante, hors périmètre de cette itération).
+- 6 nouveaux tests d'intégration (bulletins texte/nombre/échelle/
+  classement valides et invalides, route `/responses`) —
+  23 tests `agoravote-api` au total, tous verts.
+- `docs/openapi.yaml` mis à jour en premier (nouvelle route, DTO
+  étendu, schémas `QuestionResponses`/`NumericSummary`), puis
+  `cd frontend && npm run gen:api`, conformément à la règle du projet.
+
+Frontend :
+- `Vote.tsx` réécrit avec une UI de saisie par type (boutons 1..N pour
+  échelle, `<input type="number">` avec bornes affichées pour nombre,
+  `<textarea>` pour texte, clic-pour-classer pour classement).
+- Nouveaux composants `ResponsesView`/`ResponsesPanel` (affichage des
+  réponses brutes, y compris un histogramme pour l'échelle) ;
+  `CampaignManage.tsx` bascule entre `TallyPanel` (choix
+  unique/multiple) et `ResponsesPanel` (texte/nombre/échelle/
+  classement) selon le type de question.
+- `Results.tsx` réécrit pour résoudre d'abord la question (détermine
+  le type, résout les libellés d'option) avant de brancher entre
+  l'UI de résultat calculé existante et `ResponsesView`.
+- **Bug préexistant trouvé et corrigé au passage** (pas demandé
+  initialement, repéré en touchant ce code) : `Results.tsx` et
+  `TallyPanel.tsx` affichaient l'identifiant brut et slugifié d'une
+  option (ex. `bleu-ciel`) au lieu de son libellé humain dans les
+  résultats — corrigé en résolvant via le tableau `options` de la
+  question, déjà disponible dans les deux composants.
+
+### Ce qui a été vérifié concrètement
+
+- 30 comptes réels créés via `POST /auth/register` (pas de fixture
+  DB directe), 18 campagnes (3 par type × 6 types) créées et publiées
+  via l'API réelle, 522 bulletins soumis par les 29 autres inscrit·e·s
+  (chaque campagne : 29 votant·e·s, un·e participant·e réservé·e au
+  test navigateur ci-dessous).
+- **Vérification mathématique** : un registre de vérité (`ledger`)
+  tenu côté script au moment de la soumission de chaque bulletin,
+  comparé bulletin par bulletin aux agrégats retournés par l'API
+  (`/results` pour les 12 campagnes choix unique/multiple/nombre/
+  échelle, `/responses` pour texte/classement) — correspondance exacte
+  sur les 18 campagnes, y compris pour les 6 campagnes où un bulletin
+  supplémentaire a ensuite été soumis en direct depuis un vrai
+  navigateur (cf. ci-dessous), reconfirmé après ce vote supplémentaire.
+- **Vérification visuelle** : parcours complet piloté par Chromium/
+  Playwright — liste des 18 campagnes (peuplée via le palliatif
+  `recentCampaigns.ts` existant, `GET /campaigns` toujours absent, cf.
+  `docs/ROADMAP.md`), vote en direct sur une campagne choix unique et
+  une campagne choix multiple (avant/après envoi, message de
+  confirmation), dépouillement mis à jour côté organisatrice, pages de
+  résultats publiques pour les 6 types de question, et les 4 nouveaux
+  écrans de saisie (échelle/nombre/texte/classement) en desktop **et**
+  mobile — aucune erreur console JS rencontrée sur l'ensemble du
+  parcours.
+- `make check` (fmt + clippy `-D warnings` + tous les tests Rust, 71
+  tests au total) : vert. Tests d'intégration PostgreSQL réels
+  (`cargo test -p agoravote-store -- --ignored`, base dédiée créée puis
+  supprimée pour l'occasion) : 10/10 verts. `npx tsc -b`, `npx oxlint`,
+  `npm run build` (frontend) : verts.
+
+### Limites connues, non résolues par cette itération
+
+- `voting.score` reste un module complet mais orphelin (aucune route
+  ne peut produire un bulletin qui l'atteint) — cf. ci-dessus.
+- `GET /campaigns` reste absent ; la liste des campagnes dépend
+  toujours du palliatif `localStorage` (`recentCampaigns.ts`).
+- Le classement affiche des réponses brutes (préférences individuelles
+  par votant·e), pas un résultat agrégé — un algorithme de vote
+  préférentiel (Condorcet/STV) reste hors MVP par choix explicite du
+  cahier des charges §2.2, pas un oubli.
+
+### Prochaines itérations candidates (mise à jour)
+
+1. Câbler `voting.score` à un vrai chemin HTTP (nécessiterait un
+   `QuestionType` de type "notation par option", absent du modèle
+   actuel — décision produit avant travail technique).
+2. `GET /campaigns` (déjà dans `docs/ROADMAP.md`, non repris ici).
+3. Reste des listes des itérations précédentes, inchangées.

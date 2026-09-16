@@ -776,6 +776,55 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/campaigns/{campaignId}/questions/{questionId}/responses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Réponses brutes pour les types de question qu'aucune méthode de vote ne dépouille (Texte, Nombre, Échelle, Classement) — public, toujours "en direct" (pas d'étape /tally). Pour Choix unique/Choix multiple, utiliser /tally puis /results à la place. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    campaignId: components["parameters"]["CampaignId"];
+                    questionId: components["parameters"]["QuestionId"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Réponses (et résumé statistique pour Nombre/Échelle) */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["QuestionResponses"];
+                    };
+                };
+                /** @description Question à choix (utiliser /tally + /results à la place) */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                404: components["responses"]["NotFound"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -950,10 +999,39 @@ export interface components {
              * @description Ignoré si un jeton d'authentification valide est fourni (l'identité du jeton prévaut toujours)
              */
             voter_id?: string | null;
+            /** @description Choix unique/multiple (id de la ou des options) ou Classement (ids de toutes les options, dans l'ordre de préférence) */
             selections?: string[];
+            /** @description Réservé pour une future méthode voting.score, non câblée à un type de question aujourd'hui — cf. dto.rs */
             scores?: {
                 [key: string]: number;
             } | null;
+            /** @description Nombre ou Échelle */
+            numeric_value?: number | null;
+            /** @description Texte libre */
+            text_value?: string | null;
+        };
+        /** @description Réponses brutes (et résumé statistique pour Nombre/Échelle) pour les types de question qu'aucune méthode de vote ne dépouille — cf. GET /campaigns/{campaignId}/questions/{questionId}/responses. */
+        QuestionResponses: {
+            /** @enum {string} */
+            kind: "text";
+            values: string[];
+        } | {
+            /** @enum {string} */
+            kind: "numeric";
+            values: number[];
+            summary?: components["schemas"]["NumericSummary"];
+        } | {
+            /** @enum {string} */
+            kind: "ranking";
+            rankings: string[][];
+        };
+        NumericSummary: {
+            count: number;
+            mean?: number | null;
+            median?: number | null;
+            std_dev?: number | null;
+            min?: number | null;
+            max?: number | null;
         };
         Ballot: {
             /** Format: uuid */
