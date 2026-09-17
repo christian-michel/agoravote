@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
+import { useLanguage } from "../i18n/LanguageContext";
 import { api, ApiError, type Campaign } from "../api/client";
 import { Alert, Button, Card, Field, StatCard, StatusBadge } from "../components/ui";
 import { CampaignsIcon, PlusIcon } from "../components/icons";
@@ -36,6 +37,7 @@ function useDashboardStats() {
 
 export default function AdminHome() {
   const { user } = useAuth();
+  const { t, lang } = useLanguage();
   const navigate = useNavigate();
   const [title, setTitle] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -56,7 +58,7 @@ export default function AdminHome() {
       rememberCampaign(campaign.id, campaign.title);
       navigate(`/admin/campagnes/${campaign.id}`);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "La création a échoué.");
+      setError(err instanceof ApiError ? err.message : t("dashboard.createError"));
     } finally {
       setSubmitting(false);
     }
@@ -70,32 +72,34 @@ export default function AdminHome() {
     <div className="flex flex-col gap-8">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-ink">Tableau de bord</h1>
-          <p className="mt-1 text-sm text-muted">Bonjour {user?.display_name}.</p>
+          <h1 className="text-2xl font-semibold text-ink">{t("dashboard.title")}</h1>
+          <p className="mt-1 text-sm text-muted">
+            {t("dashboard.greeting", { name: user?.display_name ?? "" })}
+          </p>
         </div>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
-          label="Campagnes suivies"
+          label={t("dashboard.statFollowed")}
           value={campaigns?.length ?? "…"}
           hue="var(--color-chart-1)"
           icon={<CampaignsIcon width={20} height={20} />}
         />
         <StatCard
-          label="Brouillons"
+          label={t("dashboard.statDrafts")}
           value={drafts ?? "…"}
           hue="var(--color-chart-2)"
           icon={<CampaignsIcon width={20} height={20} />}
         />
         <StatCard
-          label="Publiées"
+          label={t("dashboard.statPublished")}
           value={published ?? "…"}
           hue="var(--color-status-good)"
           icon={<CampaignsIcon width={20} height={20} />}
         />
         <StatCard
-          label="Clôturées"
+          label={t("dashboard.statClosed")}
           value={closed ?? "…"}
           hue="var(--color-chart-7)"
           icon={<CampaignsIcon width={20} height={20} />}
@@ -104,39 +108,34 @@ export default function AdminHome() {
 
       <div className="grid gap-8 lg:grid-cols-[1fr_1.3fr]">
         <Card>
-          <h2 className="font-medium text-ink">Nouvelle campagne</h2>
+          <h2 className="font-medium text-ink">{t("dashboard.newCampaign")}</h2>
           <form onSubmit={handleCreate} className="mt-4 flex flex-col gap-4">
             {error && <Alert>{error}</Alert>}
             <Field
-              label="Titre de la campagne"
+              label={t("dashboard.campaignTitleLabel")}
               name="title"
-              placeholder="Budget participatif 2027"
+              placeholder={t("dashboard.campaignTitlePlaceholder")}
               required
               value={title}
               onChange={(e) => setTitle(e.target.value)}
             />
             <Button type="submit" disabled={submitting}>
               <PlusIcon width={16} height={16} />
-              {submitting ? "Création…" : "Créer la campagne"}
+              {submitting ? t("dashboard.creating") : t("dashboard.create")}
             </Button>
           </form>
         </Card>
 
         <Card>
           <div className="flex items-center justify-between">
-            <h2 className="font-medium text-ink">Campagnes récentes</h2>
+            <h2 className="font-medium text-ink">{t("dashboard.recentCampaigns")}</h2>
             <Link to="/admin/campagnes" className="text-xs text-accent hover:underline">
-              Voir tout →
+              {t("dashboard.seeAll")}
             </Link>
           </div>
-          <p className="mt-1 text-xs text-muted">
-            Liste mémorisée dans ce navigateur — pas encore une vraie liste côté
-            serveur (aucune route ne l'expose pour l'instant).
-          </p>
+          <p className="mt-1 text-xs text-muted">{t("dashboard.recentNote")}</p>
           {recent.length === 0 ? (
-            <p className="mt-4 text-sm text-muted">
-              Aucune campagne visitée depuis ce navigateur pour l'instant.
-            </p>
+            <p className="mt-4 text-sm text-muted">{t("dashboard.noneVisited")}</p>
           ) : (
             <ul className="mt-4 flex flex-col gap-2">
               {recent.slice(0, 5).map((c) => {
@@ -151,7 +150,7 @@ export default function AdminHome() {
                       <span className="flex shrink-0 items-center gap-2">
                         {full && <StatusBadge status={full.status} />}
                         <span className="text-xs text-muted">
-                          {new Date(c.visitedAt).toLocaleDateString("fr-FR")}
+                          {new Date(c.visitedAt).toLocaleDateString(lang)}
                         </span>
                       </span>
                     </Link>

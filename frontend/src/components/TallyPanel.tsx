@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, ApiError, type ModuleManifest, type Question, type ResultSet } from "../api/client";
+import { useLanguage } from "../i18n/LanguageContext";
+import { resolveLocalizedText } from "../i18n/content";
 import { Alert, Button, Card } from "./ui";
 import { BarList } from "./charts";
-import { METHOD_COPY } from "../lib/methodCopy";
+import { getMethodCopy } from "../lib/methodCopy";
 
 export function TallyPanel({
   campaignId,
@@ -22,6 +24,7 @@ export function TallyPanel({
    * final). */
   canTally: boolean;
 }) {
+  const { t, lang } = useLanguage();
   const [methodId, setMethodId] = useState(modules[0]?.id ?? "");
   const [eligibleVoters, setEligibleVoters] = useState("");
   const [quorum, setQuorum] = useState("");
@@ -52,7 +55,7 @@ export function TallyPanel({
       });
       setResult(outcome);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Le dépouillement a échoué.");
+      setError(err instanceof ApiError ? err.message : t("tally.genericError"));
     } finally {
       setLoading(false);
     }
@@ -65,18 +68,20 @@ export function TallyPanel({
   // Les résultats calculés (`percentages`/`winners`) sont indexés par
   // ID d'option brut (ex. "bleu-ciel"), pas fait pour être lu tel quel
   // par une organisatrice — cf. Results.tsx, même correction.
-  const optionLabel = (optionId: string) =>
-    options.find((o) => o.id === optionId)?.labels.fr ?? optionId;
+  const optionLabel = (optionId: string) => {
+    const option = options.find((o) => o.id === optionId);
+    return option ? resolveLocalizedText(option.labels, lang) : optionId;
+  };
 
   return (
     <Card>
       <div className="flex items-start justify-between gap-4">
-        <h3 className="font-medium text-ink">{question.prompt.fr}</h3>
+        <h3 className="font-medium text-ink">{resolveLocalizedText(question.prompt, lang)}</h3>
         <Link
           to={`/campagnes/${campaignId}/questions/${question.id}/resultats`}
           className="shrink-0 text-xs text-accent hover:underline"
         >
-          Page de résultats publique →
+          {t("tally.publicResultsLink")}
         </Link>
       </div>
 
@@ -88,10 +93,10 @@ export function TallyPanel({
 
       {canTally && (
         <div className="mt-5 border-t border-line pt-4">
-          <p className="text-xs font-medium uppercase tracking-wide text-muted">Méthode de vote</p>
+          <p className="text-xs font-medium uppercase tracking-wide text-muted">{t("tally.method")}</p>
           <div className="mt-2 grid gap-2 sm:grid-cols-3">
             {modules.map((m) => {
-              const copy = METHOD_COPY[m.id];
+              const copy = getMethodCopy(m.id, t);
               const selected = methodId === m.id;
               return (
                 <button
@@ -111,14 +116,16 @@ export function TallyPanel({
 
           {options.length > 0 && (
             <div className="mt-4">
-              <p className="text-xs font-medium uppercase tracking-wide text-muted">Aperçu du bulletin</p>
+              <p className="text-xs font-medium uppercase tracking-wide text-muted">
+                {t("tally.ballotPreview")}
+              </p>
               <ul className="mt-2 flex flex-col gap-1.5">
                 {options.map((o) => (
                   <li
                     key={o.id}
                     className="rounded-md border border-line bg-paper px-3 py-1.5 text-xs text-ink-soft"
                   >
-                    {o.labels.fr}
+                    {resolveLocalizedText(o.labels, lang)}
                   </li>
                 ))}
               </ul>
@@ -127,7 +134,7 @@ export function TallyPanel({
 
           <div className="mt-4 flex flex-wrap items-end gap-3 text-sm">
             <label className="flex flex-col gap-1">
-              <span className="text-xs font-medium text-ink-soft">Électeurs éligibles</span>
+              <span className="text-xs font-medium text-ink-soft">{t("tally.eligibleVoters")}</span>
               <input
                 className="w-28 rounded-md border border-line bg-surface px-2 py-1.5"
                 type="number"
@@ -137,7 +144,7 @@ export function TallyPanel({
               />
             </label>
             <label className="flex flex-col gap-1">
-              <span className="text-xs font-medium text-ink-soft">Quorum (%)</span>
+              <span className="text-xs font-medium text-ink-soft">{t("tally.quorumPercent")}</span>
               <input
                 className="w-24 rounded-md border border-line bg-surface px-2 py-1.5"
                 type="number"
@@ -148,7 +155,7 @@ export function TallyPanel({
               />
             </label>
             <Button onClick={handleTally} disabled={loading || !methodId}>
-              {loading ? "Calcul…" : "Dépouiller"}
+              {loading ? t("tally.computing") : t("tally.launch")}
             </Button>
           </div>
         </div>
@@ -157,9 +164,14 @@ export function TallyPanel({
       {result && (
         <div className="mt-5 border-t border-line pt-4">
           <p className="text-xs text-muted">
-            Méthode {METHOD_COPY[result.voting_method_id]?.label ?? result.voting_method_id} v
-            {result.voting_method_version} · {result.outcome.valid_ballots} suffrage(s) exprimé(s) sur{" "}
-            {result.outcome.total_ballots}
+            {t("results.methodVersion", {
+              label: getMethodCopy(result.voting_method_id, t)?.label ?? result.voting_method_id,
+              version: result.voting_method_version,
+            })}{" "}
+            · {t("tally.validBallots", {
+              valid: result.outcome.valid_ballots,
+              total: result.outcome.total_ballots,
+            })}
           </p>
           <div className="mt-3">
             <BarList
@@ -175,7 +187,7 @@ export function TallyPanel({
           </div>
           {result.outcome.quorum_met !== null && result.outcome.quorum_met !== undefined && (
             <p className="mt-3 text-xs text-muted">
-              Quorum {result.outcome.quorum_met ? "atteint" : "non atteint"}
+              {result.outcome.quorum_met ? t("results.quorumMet") : t("results.quorumNotMet")}
             </p>
           )}
         </div>

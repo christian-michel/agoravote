@@ -203,7 +203,8 @@ compilation TypeScript plutôt qu'en bug silencieux à l'exécution.
 | `src/components/FormBuilder.tsx` | Bibliothèque de questions (six types déjà acceptés par l'API) + canevas |
 | `src/components/` (autres) | UI de base (`ui.tsx`), panneau de dépouillement — choix unique/multiple (`TallyPanel.tsx`) —, panneau/vue de réponses brutes — texte/nombre/échelle/classement (`ResponsesPanel.tsx`/`ResponsesView.tsx`, itération 12), panneau/vue jugement majoritaire (`MajorityJudgmentPanel.tsx`/`MajorityJudgmentResults.tsx`, itération 13) |
 | `src/pages/` | Un fichier par écran (cf. `frontend/README.md` pour la table complète) — inclut depuis l'itération 7 `CampaignsList.tsx`, `ModulesPage.tsx` et `Analysis.tsx`, depuis l'itération 8 `G1Login.tsx` (planche 17 de l'addendum, `/connexion-g1`), et depuis l'itération 13 `CampaignInvite.tsx` (page d'invitation publique avec QR code, `/campagnes/:id/questions/:id/inviter`) |
-| `src/lib/methodCopy.ts` | Libellés/descriptions éditoriales des méthodes de vote natives, partagés entre `ModulesPage` et `TallyPanel` |
+| `src/lib/methodCopy.ts` | Libellés/descriptions éditoriales des méthodes de vote natives (traduits, `getMethodCopy(id, t)`), partagés entre `ModulesPage`, `TallyPanel`, `Results` et `Analysis` |
+| `src/i18n/` | Multilinguisme (itération 14) : `LanguageContext.tsx` (contexte React, `t()`), `translations/fr.ts`/`en.ts` (dictionnaires, `en.ts` vérifié par le compilateur contre `fr.ts`), `content.ts` (`resolveLocalizedText`, résout `prompt`/`labels` stockés selon la langue courante avec repli français), `LanguageSwitcher.tsx` |
 | `DESIGN.md` | Direction visuelle et sa justification |
 
 Compilation TypeScript, lint et build de production vérifiés verts, et

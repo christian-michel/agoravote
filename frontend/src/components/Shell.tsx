@@ -1,6 +1,8 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
+import { useLanguage } from "../i18n/LanguageContext";
+import { LanguageSwitcher } from "../i18n/LanguageSwitcher";
 import { Button } from "./ui";
 
 /** En-tête commun à tout le site. Volontairement discret : le
@@ -8,6 +10,7 @@ import { Button } from "./ui";
  * cf. DESIGN.md, "un accent, utilisé avec parcimonie". */
 export function Shell({ children }: { children: ReactNode }) {
   const { user, status, logout } = useAuth();
+  const { t } = useLanguage();
 
   return (
     <div className="min-h-screen bg-paper text-ink">
@@ -17,23 +20,24 @@ export function Shell({ children }: { children: ReactNode }) {
             AgoraVote
           </Link>
           <nav className="flex items-center gap-3 text-sm sm:gap-4">
+            <LanguageSwitcher />
             {status === "authenticated" && user ? (
               <>
                 <Link to="/admin" className="hidden text-ink-soft hover:text-ink sm:inline">
-                  Tableau de bord
+                  {t("nav.dashboard")}
                 </Link>
                 <span className="hidden text-muted sm:inline">{user.display_name}</span>
                 <Button variant="secondary" onClick={() => logout()}>
-                  Se déconnecter
+                  {t("nav.logout")}
                 </Button>
               </>
             ) : status === "anonymous" ? (
               <>
                 <Link to="/connexion" className="text-ink-soft hover:text-ink">
-                  Se connecter
+                  {t("shell.login")}
                 </Link>
                 <Link to="/inscription">
-                  <Button>Créer un compte</Button>
+                  <Button>{t("shell.createAccount")}</Button>
                 </Link>
               </>
             ) : null}

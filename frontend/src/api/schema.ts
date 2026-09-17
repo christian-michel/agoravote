@@ -965,7 +965,16 @@ export interface components {
             };
         };
         CreateQuestionRequest: {
-            prompt: string;
+            /**
+             * @description Intitulé traduit, par code langue (§1.1 multilinguisme natif) — même forme que QuestionOption.labels. "fr" est requis (refusé avec 400 sinon), les autres langues sont optionnelles.
+             * @example {
+             *       "fr": "Quelle est votre couleur préférée ?",
+             *       "en": "What is your favorite color?"
+             *     }
+             */
+            prompt: {
+                [key: string]: string;
+            };
             /** @enum {string} */
             type: "single_choice" | "multiple_choice" | "text" | "number" | "scale" | "ranking" | "majority_judgment";
             /** @default false */

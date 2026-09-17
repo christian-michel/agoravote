@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api, ApiError, type Campaign, type Form, type Question, type ResultSet } from "../api/client";
+import { useLanguage } from "../i18n/LanguageContext";
+import { resolveLocalizedText } from "../i18n/content";
 import { Alert, Card } from "../components/ui";
 import { BarList } from "../components/charts";
-import { METHOD_COPY } from "../lib/methodCopy";
+import { getMethodCopy } from "../lib/methodCopy";
 
 /**
  * Écran "Analyse et visualisation" (planche 6, §10.1 écran 12).
@@ -24,6 +26,7 @@ import { METHOD_COPY } from "../lib/methodCopy";
  * connue dans docs/ROADMAP.md plutôt que simulé.
  */
 export default function Analysis() {
+  const { t, lang } = useLanguage();
   const { campaignId } = useParams<{ campaignId: string }>();
   const [campaign, setCampaign] = useState<Campaign | null>(null);
   const [form, setForm] = useState<Form | null>(null);
@@ -49,15 +52,15 @@ export default function Analysis() {
         );
         setResults(Object.fromEntries(entries));
       } catch (err) {
-        setError(err instanceof ApiError ? err.message : "Impossible de charger l'analyse.");
+        setError(err instanceof ApiError ? err.message : t("analysis.loadError"));
       } finally {
         setLoading(false);
       }
     })();
-  }, [campaignId]);
+  }, [campaignId, t]);
 
-  if (loading) return <p className="text-sm text-muted">Chargement…</p>;
-  if (error || !campaign || !form || !campaignId) return <Alert>{error ?? "Introuvable."}</Alert>;
+  if (loading) return <p className="text-sm text-muted">{t("common.loading")}</p>;
+  if (error || !campaign || !form || !campaignId) return <Alert>{error ?? t("analysis.notFound")}</Alert>;
 
   const withResults = form.questions.filter((q) => results[q.id]);
   const totalValidBallots = withResults.reduce((sum, q) => sum + (results[q.id]?.outcome.valid_ballots ?? 0), 0);
@@ -65,14 +68,14 @@ export default function Analysis() {
   return (
     <div className="flex flex-col gap-8">
       <Link to={`/admin/campagnes/${campaignId}`} className="text-xs text-muted hover:text-ink">
-        ← {campaign.title}
+        {t("common.back")} {campaign.title}
       </Link>
 
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-ink">Analyse et visualisation</h1>
+          <h1 className="text-2xl font-semibold text-ink">{t("analysis.title")}</h1>
           <p className="mt-1 text-sm text-muted">
-            Comparaison des résultats déjà dépouillés pour chaque question de « {campaign.title} ».
+            {t("analysis.subtitle", { title: campaign.title })}
           </p>
         </div>
         <div className="flex rounded-md border border-line p-0.5 text-xs">
@@ -85,7 +88,7 @@ export default function Analysis() {
                 view === v ? "bg-accent text-white" : "text-ink-soft hover:text-ink"
               }`}
             >
-              {v}
+              {v === "graphique" ? t("analysis.viewChart") : t("analysis.viewTable")}
             </button>
           ))}
         </div>
@@ -94,24 +97,21 @@ export default function Analysis() {
       <div className="grid gap-4 sm:grid-cols-3">
         <Card>
           <p className="text-2xl font-semibold text-ink">{form.questions.length}</p>
-          <p className="text-sm text-muted">Question(s) dans le formulaire</p>
+          <p className="text-sm text-muted">{t("analysis.statQuestions")}</p>
         </Card>
         <Card>
           <p className="text-2xl font-semibold text-ink">{withResults.length}</p>
-          <p className="text-sm text-muted">Question(s) dépouillée(s)</p>
+          <p className="text-sm text-muted">{t("analysis.statTallied")}</p>
         </Card>
         <Card>
           <p className="text-2xl font-semibold text-ink">{totalValidBallots}</p>
-          <p className="text-sm text-muted">Suffrages exprimés au total</p>
+          <p className="text-sm text-muted">{t("analysis.statValidBallots")}</p>
         </Card>
       </div>
 
       {withResults.length === 0 ? (
         <Card>
-          <p className="text-sm text-muted">
-            Aucune question de cette campagne n'a encore de résultat calculé — dépouillez au moins
-            une question depuis sa page de campagne pour voir une comparaison ici.
-          </p>
+          <p className="text-sm text-muted">{t("analysis.none")}</p>
         </Card>
       ) : (
         <div className="grid gap-4 lg:grid-cols-2">
@@ -119,10 +119,10 @@ export default function Analysis() {
             const result = results[question.id];
             if (!result) return null;
             const sorted = Object.entries(result.outcome.percentages).sort(([, a], [, b]) => b - a);
-            const method = METHOD_COPY[result.voting_method_id];
+            const method = getMethodCopy(result.voting_method_id, t);
             return (
               <Card key={question.id}>
-                <h2 className="font-medium text-ink">{question.prompt.fr}</h2>
+                <h2 className="font-medium text-ink">{resolveLocalizedText(question.prompt, lang)}</h2>
                 <p className="mt-0.5 text-xs text-muted">
                   {method?.label ?? result.voting_method_id} · {result.outcome.valid_ballots} suffrage(s)
                 </p>
@@ -141,9 +141,9 @@ export default function Analysis() {
                   <table className="mt-4 w-full text-sm">
                     <thead>
                       <tr className="border-b border-line text-left text-xs uppercase tracking-wide text-muted">
-                        <th className="pb-2 font-medium">Option</th>
-                        <th className="pb-2 text-right font-medium">Suffrages</th>
-                        <th className="pb-2 text-right font-medium">%</th>
+                        <th className="pb-2 font-medium">{t("analysis.colOption")}</th>
+                        <th className="pb-2 text-right font-medium">{t("analysis.colBallots")}</th>
+                        <th className="pb-2 text-right font-medium">{t("analysis.colPercent")}</th>
                       </tr>
                     </thead>
                     <tbody>

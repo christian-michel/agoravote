@@ -1503,3 +1503,156 @@ Frontend :
    tant que le scrutin n'est pas clôturé) — idée reprise du projet
    externe, non implémentée cette itération.
 2. Reste des listes des itérations précédentes, inchangées.
+
+## Itération 14 — multilinguisme de l'interface et du contenu des campagnes
+
+Objectif : le porteur de projet a demandé de rendre l'application
+capable de gérer le multilangue. Le modèle de données le permettait
+déjà partiellement (§1.1 "multilinguisme natif" du cahier des charges :
+`Question.prompt` et `QuestionOption.labels` sont des tables
+`code langue -> texte` depuis l'origine du projet), mais deux limites
+empêchaient d'en tirer parti :
+1. **L'interface elle-même** (boutons, libellés, messages d'erreur —
+   des centaines de chaînes) était intégralement câblée en français,
+   sans mécanisme de traduction (déjà noté dans `docs/ROADMAP.md`,
+   section Frontend).
+2. **Le contenu des campagnes n'était en réalité PAS multilingue
+   malgré le modèle** : `CreateQuestionRequest.prompt` (contrairement
+   à `QuestionOption.labels`, déjà une table) était un simple `String`
+   côté DTO — `create_form` le enveloppait systématiquement sous la
+   seule clé "fr". Aucun organisateur ne pouvait donc réellement saisir
+   un intitulé de question en plusieurs langues avant cette itération,
+   même si l'option existait déjà pour les libellés d'option.
+
+### Choix de périmètre
+
+Deux langues au démarrage — **français** (référence, toujours requise)
+et **anglais** — avec une architecture pensée pour en ajouter d'autres
+sans réécriture (un fichier `translations/<code>.ts` de plus,
+vérifié par le compilateur contre le dictionnaire français). Pas de
+bibliothèque i18n externe : un contexte React + deux dictionnaires
+statiques suffisent à l'échelle de cette application, cohérent avec le
+choix déjà fait ailleurs (aucun kit UI, SVG inline pour les
+graphiques — cf. `docs/DEVLOG.md`, choix répétés de dépendances
+minimales).
+
+**Persistance du choix de langue : locale au navigateur uniquement**
+(`localStorage`, comme le jeton de session) — délibérément PAS
+synchronisée avec `User.preferred_language` (champ qui existe déjà
+dans `agoravote_core::User` depuis une itération antérieure, mais
+resté jusqu'ici sans lecteur ni écrivain nulle part dans la base de
+code, vérifié par recherche). Câbler cette synchronisation aurait
+demandé une nouvelle route d'API (`PATCH /auth/me` ou équivalent) et
+sortait du périmètre raisonnable de cette itération — noté dans
+`docs/ROADMAP.md` comme prochaine étape logique.
+
+### Ce qui a changé
+
+Backend :
+- `CreateQuestionRequest.prompt` : `String` → `HashMap<String, String>`
+  (même forme que `QuestionOption.labels`, qui était déjà correcte).
+  `Form::add_question` prend directement cette table plutôt que de la
+  construire lui-même à partir d'une seule chaîne "fr" — c'est
+  désormais à l'appelant (la route HTTP) de garantir la présence du
+  français, pas à ce constructeur de portée générale de l'imposer.
+- `routes.rs::create_form` valide que chaque question fournit un
+  intitulé en français (`400` explicite sinon — "l'intitulé de chaque
+  question doit au moins être fourni en français") : le français reste
+  la langue de référence garantie, les autres sont optionnelles.
+- 2 nouveaux tests d'intégration (acceptation d'un intitulé
+  multilingue avec vérification de la traduction anglaise renvoyée
+  telle quelle ; rejet d'un intitulé sans clé "fr") — 30 tests
+  `agoravote-api` au total, tous verts. `docs/openapi.yaml` mis à jour
+  en premier (schéma `CreateQuestionRequest.prompt` désormais un objet
+  `additionalProperties: string`), puis régénération des types
+  frontend, conformément à la convention du projet.
+
+Frontend :
+- Nouveau répertoire `src/i18n/` : `LanguageContext.tsx` (contexte
+  React, fonction `t(clé, variables?)` avec interpolation simple,
+  persistance `localStorage`, détection initiale : préférence déjà
+  choisie -> langue du navigateur si supportée -> français par
+  défaut), `translations/fr.ts` (dictionnaire de référence,
+  ~180 clés) et `translations/en.ts` (même jeu de clés, vérifié par le
+  compilateur via `Record<TranslationKey, string>` — une traduction
+  manquante est une erreur de build, pas un texte qui reste
+  silencieusement en français en production), `content.ts`
+  (`resolveLocalizedText` : résout un contenu de campagne stocké selon
+  la langue d'interface courante, repli langue courante -> français ->
+  première traduction disponible -> chaîne vide, ne lève jamais
+  d'exception), `LanguageSwitcher.tsx` (sélecteur partagé entre `Shell`
+  et `AdminLayout`).
+- **Toutes** les pages et tous les composants partagés ont été
+  traduits (chaque chaîne française en dur remplacée par `t("clé")`) :
+  écrans publics (accueil, connexion, inscription, connexion Ğ1),
+  écrans admin (tableau de bord, liste de campagnes, modules, analyse,
+  gestion de campagne, constructeur de formulaire), écrans de vote et
+  de résultats (vote citoyen, résultats, invitation, dépouillement
+  choix unique/multiple, jugement majoritaire, réponses brutes),
+  composants graphiques partagés (`BarList` "— gagnant"), libellés des
+  méthodes de vote natives (`methodCopy.ts`, devenu une fonction
+  `getMethodCopy(id, t)` plutôt qu'un dictionnaire figé) et des
+  mentions du jugement majoritaire (`majorityJudgmentMentions.ts`,
+  couleurs restées fixes — indépendantes de la langue — mais libellés
+  désormais résolus via `t()`).
+- **Contenu des campagnes** : `Vote.tsx`, `Results.tsx`,
+  `TallyPanel.tsx`, `MajorityJudgmentPanel.tsx`, `ResponsesPanel.tsx`,
+  `ResponsesView.tsx`, `CampaignInvite.tsx` et `Analysis.tsx`
+  résolvent désormais `prompt`/`labels` via `resolveLocalizedText`
+  plutôt que de lire `.fr` en dur — un intitulé de question ou un
+  libellé d'option s'affiche dans la langue d'interface courante si une
+  traduction existe, sinon retombe proprement sur le français.
+- `FormBuilder.tsx` : un second champ optionnel "Traduction anglaise"
+  à côté de chaque intitulé de question et chaque libellé d'option
+  (le français reste seul obligatoire) — `localizedRecord()` construit
+  la table `{fr, en?}` envoyée à l'API, n'incluant "en" que si
+  l'organisateur l'a réellement renseigné (un champ anglais vide ne
+  produit pas une traduction vide qui casserait le repli).
+
+### Ce qui a été vérifié concrètement
+
+- Parcours complet piloté par Chromium/Playwright : bascule
+  français/anglais sur l'accueil, persistance du choix après
+  rechargement de page (`localStorage`), inscription en anglais,
+  création d'une campagne bilingue via l'API réelle (intitulé de
+  question ET libellés d'option traduits), vote et page de résultats
+  publique affichant le contenu de campagne en anglais (pas seulement
+  le chrome de l'interface — vérifié explicitement : le `<h1>` de
+  l'écran de vote affiche bien "What is your favorite color?", pas
+  l'intitulé français), retour au français avec repli correct, tableau
+  de bord admin bilingue avec sélecteur dans la nav latérale, tiroir de
+  navigation mobile avec sélecteur inclus. Aucune erreur console sur
+  l'ensemble du parcours.
+- Détail notable : Chromium headless détecte `navigator.language =
+  "en-US"` dans cet environnement — l'application choisit donc
+  correctement l'anglais par défaut au premier chargement (repli
+  navigateur fonctionnel, pas juste un repli français câblé en dur).
+- `make check` (fmt + clippy `-D warnings` + tous les tests Rust) :
+  vert. `npx tsc -b`, `npx oxlint`, `npm run build` (frontend) : verts
+  — en particulier, `tsc` confirme que `en.ts` fournit bien une
+  traduction pour chacune des clés définies dans `fr.ts` (le contrat de
+  type `Record<TranslationKey, string>` aurait fait échouer la
+  compilation sinon).
+
+### Limites connues, non résolues par cette itération
+
+- `User.preferred_language` reste un champ non lu/non écrit : le choix
+  de langue ne se synchronise pas entre appareils (cf. "Choix de
+  périmètre" ci-dessus).
+- Seules deux langues sont fournies (français, anglais) — l'ajout d'une
+  troisième langue est prévu par l'architecture mais pas encore fait.
+- Le contenu déjà existant en base (campagnes créées avant cette
+  itération) n'a par construction qu'une clé "fr" dans `prompt`/
+  `labels` : rien à migrer (le repli vers le français gère nativement
+  ce cas), mais ces anciennes campagnes resteront françaises tant que
+  personne n'y ajoute de traduction — comportement attendu, pas un bug.
+
+### Prochaines itérations candidates (mise à jour)
+
+1. Synchroniser `User.preferred_language` (nouvelle route de mise à
+   jour du profil) pour que le choix de langue suive l'utilisateur
+   entre appareils, pas seulement ce navigateur.
+2. Ajouter une troisième langue pour valider que l'architecture tient
+   au-delà de deux (aucun changement de code attendu ailleurs qu'un
+   nouveau fichier `translations/<code>.ts`).
+3. Reste des listes des itérations précédentes, inchangées.

@@ -111,9 +111,24 @@ coché — l'historique de ce qui a été priorisé et quand a de la valeur.
       d'invitation publique avec QR code. Fait — cf. `docs/DEVLOG.md`
       itération 13.
 - [ ] Écran de permissions/audit une fois le backend correspondant fait.
-- [ ] Affichage multilingue de l'interface elle-même (le contenu des
-      campagnes l'est déjà côté modèle — `prompt`/`labels` par langue
-      — mais l'interface n'affiche que `fr`).
+- [x] Affichage multilingue de l'interface elle-même ET du contenu des
+      campagnes (français + anglais). Fait — cf. `docs/DEVLOG.md`
+      itération 14 : contexte `LanguageContext`/`t()`, sélecteur de
+      langue (Shell + AdminLayout), `resolveLocalizedText` pour le
+      contenu stocké, saisie bilingue dans `FormBuilder`. Corrige au
+      passage un écart réel entre le modèle (déjà multilingue) et
+      l'API : `CreateQuestionRequest.prompt` n'acceptait jusqu'ici
+      qu'une chaîne française, malgré `QuestionOption.labels` déjà une
+      table de traductions.
+- [ ] Synchroniser `User.preferred_language` (champ existant, jamais
+      lu ni écrit) avec le choix de langue d'interface — aujourd'hui
+      purement local au navigateur (`localStorage`), pas de suivi
+      multi-appareil. Nécessiterait une route de mise à jour du profil,
+      cf. `docs/DEVLOG.md` itération 14.
+- [ ] Ajouter une troisième langue d'interface, pour confirmer que
+      l'architecture i18n (itération 14) tient au-delà de deux langues
+      sans changement ailleurs qu'un nouveau
+      `frontend/src/i18n/translations/<code>.ts`.
 - [ ] Écran "Utilisateurs" et écran "Paramètres" (nav latérale
       `AdminLayout`, affichés grisés avec un badge "Bientôt" depuis
       l'itération 7, faute de backend — gestion d'utilisateurs,

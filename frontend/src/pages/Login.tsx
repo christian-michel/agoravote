@@ -1,11 +1,13 @@
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
+import { useLanguage } from "../i18n/LanguageContext";
 import { ApiError } from "../api/client";
 import { Alert, Button, Card, Field } from "../components/ui";
 
 export default function Login() {
   const { login } = useAuth();
+  const { t } = useLanguage();
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -24,7 +26,7 @@ export default function Login() {
       // ("email ou mot de passe incorrect") pour ne pas permettre de
       // deviner quels emails ont un compte — cf. docs/SECURITY.md §7
       // côté backend. On l'affiche tel quel, sans le reformuler.
-      setError(err instanceof ApiError ? err.message : "La connexion a échoué.");
+      setError(err instanceof ApiError ? err.message : t("login.genericError"));
     } finally {
       setSubmitting(false);
     }
@@ -32,12 +34,12 @@ export default function Login() {
 
   return (
     <div className="mx-auto max-w-sm">
-      <h1 className="font-display text-2xl font-medium text-ink">Se connecter</h1>
+      <h1 className="font-display text-2xl font-medium text-ink">{t("login.title")}</h1>
       <Card className="mt-6">
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           {error && <Alert>{error}</Alert>}
           <Field
-            label="Adresse e-mail"
+            label={t("login.email")}
             type="email"
             name="email"
             autoComplete="email"
@@ -46,7 +48,7 @@ export default function Login() {
             onChange={(e) => setEmail(e.target.value)}
           />
           <Field
-            label="Mot de passe"
+            label={t("login.password")}
             type="password"
             name="password"
             autoComplete="current-password"
@@ -55,22 +57,22 @@ export default function Login() {
             onChange={(e) => setPassword(e.target.value)}
           />
           <Button type="submit" disabled={submitting}>
-            {submitting ? "Connexion…" : "Se connecter"}
+            {submitting ? t("login.submitting") : t("login.submit")}
           </Button>
         </form>
       </Card>
       <p className="mt-4 text-sm text-muted">
-        Pas encore de compte ?{" "}
+        {t("login.noAccount")}{" "}
         <Link to="/inscription" className="text-accent hover:underline">
-          Créer un compte organisateur
+          {t("login.createOrganizer")}
         </Link>
       </p>
       <p className="mt-2 text-sm text-muted">
-        Ou{" "}
+        {t("login.or")}{" "}
         <Link to="/connexion-g1" className="text-accent hover:underline">
-          se connecter avec un compte Ğ1
+          {t("login.g1Link")}
         </Link>{" "}
-        (identité décentralisée optionnelle).
+        {t("login.g1Suffix")}
       </p>
     </div>
   );

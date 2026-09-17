@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import QRCode from "qrcode";
 import { api, ApiError, type Campaign, type Question } from "../api/client";
+import { useLanguage, pluralize } from "../i18n/LanguageContext";
+import { resolveLocalizedText } from "../i18n/content";
 import { Alert, Button, Card, StatCard } from "../components/ui";
 import { ShareIcon } from "../components/icons";
 
@@ -14,6 +16,7 @@ import { ShareIcon } from "../components/icons";
  * distinction avec `/results`.
  */
 export default function CampaignInvite() {
+  const { t, lang } = useLanguage();
   const { campaignId, questionId } = useParams<{ campaignId: string; questionId: string }>();
   const [campaign, setCampaign] = useState<Campaign | null>(null);
   const [question, setQuestion] = useState<Question | null>(null);
@@ -41,19 +44,19 @@ export default function CampaignInvite() {
         ]);
         const q = f.questions.find((item) => item.id === questionId);
         if (!q) {
-          setError("Cette question n'existe pas dans cette campagne.");
+          setError(t("results.questionNotFound"));
           return;
         }
         setCampaign(c);
         setQuestion(q);
         setBallotCount(bc.count);
       } catch (err) {
-        setError(err instanceof ApiError ? err.message : "Impossible de charger ce sondage.");
+        setError(err instanceof ApiError ? err.message : t("invite.loadError"));
       } finally {
         setLoading(false);
       }
     })();
-  }, [campaignId, questionId]);
+  }, [campaignId, questionId, t]);
 
   useEffect(() => {
     if (!voteUrl) return;
@@ -74,11 +77,11 @@ export default function CampaignInvite() {
     }
   }
 
-  if (loading) return <p className="text-sm text-muted">Chargement…</p>;
+  if (loading) return <p className="text-sm text-muted">{t("common.loading")}</p>;
   if (error || !campaign || !question) {
     return (
       <div className="mx-auto max-w-md">
-        <Alert kind="error">{error ?? "Sondage introuvable."}</Alert>
+        <Alert kind="error">{error ?? t("invite.notFound")}</Alert>
       </div>
     );
   }
@@ -88,21 +91,25 @@ export default function CampaignInvite() {
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-6">
       <div className="text-center">
-        <h1 className="text-3xl font-semibold text-ink">🗳️ Vous êtes invité·e à voter !</h1>
-        <p className="mt-2 text-sm text-ink-soft">Votre avis compte. Prenez part au sondage :</p>
+        <h1 className="text-3xl font-semibold text-ink">🗳️ {t("invite.title")}</h1>
+        <p className="mt-2 text-sm text-ink-soft">{t("invite.subtitle")}</p>
       </div>
 
       <Card className="text-center">
         <h2 className="text-xl font-semibold text-ink">{campaign.title}</h2>
-        <p className="mt-1 text-sm text-muted">{question.prompt.fr}</p>
+        <p className="mt-1 text-sm text-muted">{resolveLocalizedText(question.prompt, lang)}</p>
       </Card>
 
       <div className="grid gap-4 sm:grid-cols-2">
         {optionCount !== null && (
-          <StatCard label="Proposition(s)" value={optionCount} icon={<span>📝</span>} />
+          <StatCard
+            label={pluralize(optionCount, t("invite.propositionsSingular"), t("invite.propositionsPlural"))}
+            value={optionCount}
+            icon={<span>📝</span>}
+          />
         )}
         <StatCard
-          label="Vote(s) enregistré(s)"
+          label={pluralize(ballotCount ?? 0, t("invite.votesSingular"), t("invite.votesPlural"))}
           value={ballotCount ?? 0}
           icon={<span>👥</span>}
           hue="var(--color-chart-2)"
@@ -112,30 +119,30 @@ export default function CampaignInvite() {
       <Card>
         <div className="grid gap-6 sm:grid-cols-2 sm:items-center">
           <div className="text-center">
-            <h3 className="mb-3 font-medium text-ink">📱 Scanner pour voter</h3>
+            <h3 className="mb-3 font-medium text-ink">📱 {t("invite.scanTitle")}</h3>
             {qrDataUrl && (
               <img
                 src={qrDataUrl}
-                alt="QR code vers le vote"
+                alt={t("invite.scanTitle")}
                 className="mx-auto rounded-md border border-line"
                 width={220}
                 height={220}
               />
             )}
-            <p className="mt-2 text-xs text-muted">Scannez ce QR code avec votre smartphone.</p>
+            <p className="mt-2 text-xs text-muted">{t("invite.scanHint")}</p>
           </div>
           <div className="text-center">
-            <h3 className="mb-3 font-medium text-ink">💻 Voter maintenant</h3>
+            <h3 className="mb-3 font-medium text-ink">💻 {t("invite.voteNowTitle")}</h3>
             <Link to={`/campagnes/${campaignId}/questions/${questionId}/voter`}>
-              <Button className="w-full">Accéder au sondage</Button>
+              <Button className="w-full">{t("invite.voteNowButton")}</Button>
             </Link>
-            <p className="mt-2 text-xs text-muted">Cliquez ici pour voter depuis cet appareil.</p>
+            <p className="mt-2 text-xs text-muted">{t("invite.voteNowHint")}</p>
           </div>
         </div>
       </Card>
 
       <Card>
-        <h3 className="mb-3 text-center font-medium text-ink">🔗 Partager ce sondage</h3>
+        <h3 className="mb-3 text-center font-medium text-ink">🔗 {t("invite.shareTitle")}</h3>
         <div className="flex gap-2">
           <input
             readOnly
@@ -148,7 +155,7 @@ export default function CampaignInvite() {
             onClick={handleCopy}
             className="flex shrink-0 items-center gap-1.5 rounded-md border border-line bg-surface px-3 py-2 text-xs text-ink-soft hover:border-accent"
           >
-            <ShareIcon width={14} height={14} /> {copied ? "Copié !" : "Copier"}
+            <ShareIcon width={14} height={14} /> {copied ? t("invite.copied") : t("invite.copy")}
           </button>
         </div>
       </Card>

@@ -6,6 +6,7 @@
  * espace de 2px en couleur de fond entre segments adjacents.
  */
 import { useId } from "react";
+import { useLanguage } from "../i18n/LanguageContext";
 
 const CHART_HUES = [
   "var(--color-chart-1)",
@@ -30,6 +31,7 @@ export interface BarListItem {
  * par un libellé en gras, jamais par une teinte différente (cf. règle
  * "le texte ne porte jamais la couleur de la donnée"). */
 export function BarList({ items, unit = "%" }: { items: BarListItem[]; unit?: string }) {
+  const { t } = useLanguage();
   // Longueur normalisée sur le plus grand item affiché, pas sur une
   // échelle 0-100 fixe : l'option en tête occupe toujours la largeur
   // disponible, ce qui rend le classement lisible d'un coup d'œil même
@@ -45,7 +47,7 @@ export function BarList({ items, unit = "%" }: { items: BarListItem[]; unit?: st
           <div className="flex items-center justify-between gap-3 text-sm">
             <span className={item.highlighted ? "font-semibold text-ink" : "text-ink-soft"}>
               {item.label}
-              {item.highlighted && " — gagnant"}
+              {item.highlighted && t("charts.winnerSuffix")}
             </span>
             <span className="shrink-0 tabular-nums text-muted">
               {item.value.toFixed(1)}

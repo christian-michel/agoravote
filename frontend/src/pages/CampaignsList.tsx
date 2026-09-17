@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, ApiError, type Campaign } from "../api/client";
 import { listRecentCampaigns } from "../lib/recentCampaigns";
+import { useLanguage } from "../i18n/LanguageContext";
 import { Alert, Button, Card, StatusBadge } from "../components/ui";
 import { PlusIcon } from "../components/icons";
 
@@ -10,6 +11,7 @@ import { PlusIcon } from "../components/icons";
  * de liste, donc cet écran affiche les campagnes que CE navigateur a
  * déjà créées ou visitées, pas toutes celles de l'organisation. */
 export default function CampaignsList() {
+  const { t, lang } = useLanguage();
   const [campaigns, setCampaigns] = useState<(Campaign | null)[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -29,7 +31,7 @@ export default function CampaignsList() {
       ),
     )
       .then((results) => setCampaigns(results))
-      .catch((err) => setError(err instanceof ApiError ? err.message : "Impossible de charger les campagnes."))
+      .catch((err) => setError(err instanceof ApiError ? err.message : t("campaignsList.loadError")))
       .finally(() => setLoading(false));
   }, []);
 
@@ -39,27 +41,22 @@ export default function CampaignsList() {
     <div className="flex flex-col gap-8">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-ink">Campagnes</h1>
-          <p className="mt-1 text-sm text-muted">
-            Campagnes créées ou consultées depuis ce navigateur — pas encore une
-            vraie liste côté serveur (aucune route ne l'expose pour l'instant).
-          </p>
+          <h1 className="text-2xl font-semibold text-ink">{t("campaignsList.title")}</h1>
+          <p className="mt-1 text-sm text-muted">{t("campaignsList.subtitle")}</p>
         </div>
         <Link to="/admin">
           <Button>
-            <PlusIcon width={16} height={16} /> Nouvelle campagne
+            <PlusIcon width={16} height={16} /> {t("campaignsList.new")}
           </Button>
         </Link>
       </div>
 
       {error && <Alert>{error}</Alert>}
-      {loading && <p className="text-sm text-muted">Chargement…</p>}
+      {loading && <p className="text-sm text-muted">{t("common.loading")}</p>}
 
       {!loading && found.length === 0 && (
         <Card>
-          <p className="text-sm text-muted">
-            Aucune campagne visitée depuis ce navigateur pour l'instant.
-          </p>
+          <p className="text-sm text-muted">{t("campaignsList.none")}</p>
         </Card>
       )}
 
@@ -73,7 +70,9 @@ export default function CampaignsList() {
               <div className="min-w-0">
                 <p className="truncate font-medium text-ink">{campaign.title}</p>
                 <p className="mt-1 text-xs text-muted">
-                  Créée le {new Date(campaign.created_at).toLocaleDateString("fr-FR")}
+                  {t("campaignsList.createdOn", {
+                    date: new Date(campaign.created_at).toLocaleDateString(lang),
+                  })}
                 </p>
               </div>
               <StatusBadge status={campaign.status} />

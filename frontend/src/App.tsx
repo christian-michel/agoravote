@@ -1,5 +1,6 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AuthProvider, useAuth } from "./auth/AuthContext";
+import { LanguageProvider } from "./i18n/LanguageContext";
 import { Shell } from "./components/Shell";
 import { AdminLayout } from "./components/AdminLayout";
 import Home from "./pages/Home";
@@ -31,66 +32,68 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
 export default function App() {
   return (
     <BrowserRouter>
-      <AuthProvider>
-        <Routes>
-          <Route path="/" element={<Shell><Home /></Shell>} />
-          <Route path="/connexion" element={<Shell><Login /></Shell>} />
-          <Route path="/inscription" element={<Shell><Register /></Shell>} />
-          <Route path="/connexion-g1" element={<Shell><G1Login /></Shell>} />
-          <Route
-            path="/admin"
-            element={
-              <RequireAuth>
-                <AdminHome />
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/admin/campagnes"
-            element={
-              <RequireAuth>
-                <CampaignsList />
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/admin/modules"
-            element={
-              <RequireAuth>
-                <ModulesPage />
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/admin/campagnes/:campaignId"
-            element={
-              <RequireAuth>
-                <CampaignManage />
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/admin/campagnes/:campaignId/analyse"
-            element={
-              <RequireAuth>
-                <Analysis />
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/campagnes/:campaignId/questions/:questionId/voter"
-            element={<Shell><Vote /></Shell>}
-          />
-          <Route
-            path="/campagnes/:campaignId/questions/:questionId/inviter"
-            element={<Shell><CampaignInvite /></Shell>}
-          />
-          <Route
-            path="/campagnes/:campaignId/questions/:questionId/resultats"
-            element={<Shell><Results /></Shell>}
-          />
-        </Routes>
-      </AuthProvider>
+      <LanguageProvider>
+        <AuthProvider>
+          <Routes>
+            <Route path="/" element={<Shell><Home /></Shell>} />
+            <Route path="/connexion" element={<Shell><Login /></Shell>} />
+            <Route path="/inscription" element={<Shell><Register /></Shell>} />
+            <Route path="/connexion-g1" element={<Shell><G1Login /></Shell>} />
+            <Route
+              path="/admin"
+              element={
+                <RequireAuth>
+                  <AdminHome />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/admin/campagnes"
+              element={
+                <RequireAuth>
+                  <CampaignsList />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/admin/modules"
+              element={
+                <RequireAuth>
+                  <ModulesPage />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/admin/campagnes/:campaignId"
+              element={
+                <RequireAuth>
+                  <CampaignManage />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/admin/campagnes/:campaignId/analyse"
+              element={
+                <RequireAuth>
+                  <Analysis />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/campagnes/:campaignId/questions/:questionId/voter"
+              element={<Shell><Vote /></Shell>}
+            />
+            <Route
+              path="/campagnes/:campaignId/questions/:questionId/inviter"
+              element={<Shell><CampaignInvite /></Shell>}
+            />
+            <Route
+              path="/campagnes/:campaignId/questions/:questionId/resultats"
+              element={<Shell><Results /></Shell>}
+            />
+          </Routes>
+        </AuthProvider>
+      </LanguageProvider>
     </BrowserRouter>
   );
 }

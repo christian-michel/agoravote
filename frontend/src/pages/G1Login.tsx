@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
+import { useLanguage } from "../i18n/LanguageContext";
 import { api, ApiError } from "../api/client";
 import { Alert, Button, Card, Field } from "../components/ui";
 
@@ -41,6 +42,7 @@ const DEMO_ORGANIZATION_ID = "11111111-1111-1111-1111-111111111111";
  */
 export default function G1Login() {
   const { loginWithG1 } = useAuth();
+  const { t } = useLanguage();
   const navigate = useNavigate();
 
   const [challengeMessage, setChallengeMessage] = useState<string | null>(null);
@@ -60,7 +62,7 @@ export default function G1Login() {
       setChallengeMessage(challenge.message);
     } catch (err) {
       setChallengeError(
-        err instanceof ApiError ? err.message : "Impossible d'obtenir un défi, réessayez.",
+        err instanceof ApiError ? err.message : t("g1login.challengeError"),
       );
     } finally {
       setRequestingChallenge(false);
@@ -84,7 +86,7 @@ export default function G1Login() {
       // Message volontairement générique côté API (cf.
       // routes.rs::unauthorized_g1) : signature invalide ou défi
       // expiré produisent la même réponse, on l'affiche telle quelle.
-      setVerifyError(err instanceof ApiError ? err.message : "La connexion a échoué.");
+      setVerifyError(err instanceof ApiError ? err.message : t("g1login.verifyError"));
     } finally {
       setVerifying(false);
     }
@@ -92,25 +94,17 @@ export default function G1Login() {
 
   return (
     <div className="mx-auto max-w-lg">
-      <h1 className="font-display text-2xl font-medium text-ink">Se connecter avec Ğ1</h1>
-      <p className="mt-2 text-sm text-muted">
-        Identité décentralisée optionnelle : prouvez que vous détenez un compte Ğ1v2 en signant un
-        défi avec votre portefeuille (Cesium², Ğecko...), sans jamais communiquer votre phrase de
-        12 mots à AgoraVote.
-      </p>
+      <h1 className="font-display text-2xl font-medium text-ink">{t("g1login.title")}</h1>
+      <p className="mt-2 text-sm text-muted">{t("g1login.subtitle")}</p>
       <div className="mt-3 rounded-md border border-line bg-paper px-4 py-3 text-xs text-muted">
-        Cette connexion prouve uniquement que vous possédez ce compte Ğ1 — pas que vous êtes membre
-        de la toile de confiance. AgoraVote ne vérifie pas encore l'adhésion à la toile de confiance.
+        {t("g1login.disclaimer")}
       </div>
 
       <Card className="mt-6">
         <div className="flex flex-col gap-4">
           <div>
-            <p className="text-sm font-medium text-ink">1. Obtenir un défi à signer</p>
-            <p className="mt-1 text-sm text-muted">
-              Générez un défi, copiez-le dans votre portefeuille Ğ1, signez-le avec le compte que
-              vous souhaitez lier, puis reportez ci-dessous la clé publique et la signature obtenues.
-            </p>
+            <p className="text-sm font-medium text-ink">{t("g1login.step1Title")}</p>
+            <p className="mt-1 text-sm text-muted">{t("g1login.step1Body")}</p>
           </div>
 
           {challengeError && <Alert>{challengeError}</Alert>}
@@ -122,12 +116,12 @@ export default function G1Login() {
               disabled={requestingChallenge}
               onClick={requestChallenge}
             >
-              {requestingChallenge ? "Génération…" : "Générer un défi"}
+              {requestingChallenge ? t("g1login.generating") : t("g1login.generateChallenge")}
             </Button>
           ) : (
             <div className="flex flex-col gap-1.5">
               <label className="text-sm font-medium text-ink" htmlFor="g1-challenge">
-                Défi à signer (valide 5 minutes)
+                {t("g1login.challengeLabel")}
               </label>
               <textarea
                 id="g1-challenge"
@@ -143,7 +137,7 @@ export default function G1Login() {
                 disabled={requestingChallenge}
                 className="self-start text-xs text-accent hover:underline"
               >
-                {requestingChallenge ? "Génération…" : "Régénérer un défi"}
+                {requestingChallenge ? t("g1login.generating") : t("g1login.regenerateChallenge")}
               </button>
             </div>
           )}
@@ -153,12 +147,12 @@ export default function G1Login() {
       {challengeMessage && (
         <Card className="mt-4">
           <form onSubmit={handleVerify} className="flex flex-col gap-4">
-            <p className="text-sm font-medium text-ink">2. Fournir la preuve de signature</p>
+            <p className="text-sm font-medium text-ink">{t("g1login.step2Title")}</p>
 
             {verifyError && <Alert>{verifyError}</Alert>}
 
             <Field
-              label="Clé publique Ğ1 (hexadécimal)"
+              label={t("g1login.publicKeyLabel")}
               name="publicKeyHex"
               required
               placeholder="ex : d43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27"
@@ -168,7 +162,7 @@ export default function G1Login() {
 
             <div className="flex flex-col gap-1.5">
               <label className="text-sm font-medium text-ink" htmlFor="g1-signature">
-                Signature du défi (hexadécimal)
+                {t("g1login.signatureLabel")}
               </label>
               <textarea
                 id="g1-signature"
@@ -177,21 +171,21 @@ export default function G1Login() {
                 value={signatureHex}
                 onChange={(e) => setSignatureHex(e.target.value)}
                 className="rounded-md border border-line bg-surface px-3 py-2 font-mono text-xs text-ink placeholder:text-muted focus:border-accent"
-                placeholder="signature obtenue depuis votre portefeuille"
+                placeholder={t("g1login.signaturePlaceholder")}
               />
             </div>
 
             <Button type="submit" disabled={verifying}>
-              {verifying ? "Vérification…" : "Vérifier et se connecter"}
+              {verifying ? t("g1login.verifying") : t("g1login.verifyAndLogin")}
             </Button>
           </form>
         </Card>
       )}
 
       <p className="mt-4 text-sm text-muted">
-        Pas de compte Ğ1 ?{" "}
+        {t("g1login.noAccount")}{" "}
         <Link to="/connexion" className="text-accent hover:underline">
-          Se connecter par e-mail et mot de passe
+          {t("g1login.loginWithPassword")}
         </Link>
       </p>
     </div>

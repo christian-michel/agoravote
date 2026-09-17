@@ -1,10 +1,13 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api, ApiError, type Campaign, type Question } from "../api/client";
+import { useLanguage } from "../i18n/LanguageContext";
+import { resolveLocalizedText } from "../i18n/content";
 import { Alert, Button, Card } from "../components/ui";
 import { MAJORITY_JUDGMENT_MENTIONS } from "../lib/majorityJudgmentMentions";
 
 export default function Vote() {
+  const { t, lang } = useLanguage();
   const { campaignId, questionId } = useParams<{ campaignId: string; questionId: string }>();
   const [campaign, setCampaign] = useState<Campaign | null>(null);
   const [question, setQuestion] = useState<Question | null>(null);
@@ -40,19 +43,19 @@ export default function Vote() {
         setCampaign(c);
         const q = f.questions.find((item) => item.id === questionId);
         if (!q) {
-          setError("Cette question n'existe pas dans cette campagne.");
+          setError(t("vote.notFound"));
           return;
         }
         setQuestion(q);
         setQuestionCount(f.questions.length);
         setQuestionPosition(f.questions.findIndex((item) => item.id === questionId) + 1);
       } catch (err) {
-        setError(err instanceof ApiError ? err.message : "Impossible de charger cette question.");
+        setError(err instanceof ApiError ? err.message : t("vote.loadError"));
       } finally {
         setLoading(false);
       }
     })();
-  }, [campaignId, questionId]);
+  }, [campaignId, questionId, t]);
 
   function toggleOption(optionId: string, multiple: boolean) {
     setSelected((current) => {
@@ -107,13 +110,13 @@ export default function Vote() {
       await api.castBallot(campaignId, questionId, body);
       setSubmitted(true);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Le vote n'a pas pu être enregistré.");
+      setError(err instanceof ApiError ? err.message : t("vote.submitError"));
     } finally {
       setSubmitting(false);
     }
   }
 
-  if (loading) return <p className="text-sm text-muted">Chargement…</p>;
+  if (loading) return <p className="text-sm text-muted">{t("common.loading")}</p>;
 
   if (error) {
     return (
@@ -127,15 +130,14 @@ export default function Vote() {
     return (
       <div className="mx-auto max-w-md text-center">
         <p className="text-sm text-ink-soft">
-          Cette campagne n'accepte pas de vote pour le moment
-          {campaign.status === "Draft" ? " (elle n'a pas encore été publiée)." : " (elle est clôturée)."}
+          {campaign.status === "Draft" ? t("vote.notPublishedDraft") : t("vote.notPublishedClosed")}
         </p>
         {campaign.status === "Closed" && questionId && campaignId && (
           <Link
             to={`/campagnes/${campaignId}/questions/${questionId}/resultats`}
             className="mt-4 inline-block text-sm text-accent hover:underline"
           >
-            Voir les résultats →
+            {t("vote.seeResults")}
           </Link>
         )}
       </div>
@@ -145,8 +147,8 @@ export default function Vote() {
   if (submitted) {
     return (
       <div className="mx-auto max-w-md text-center">
-        <h1 className="text-2xl font-semibold text-ink">Vote enregistré</h1>
-        <p className="mt-3 text-sm text-ink-soft">Merci pour votre participation.</p>
+        <h1 className="text-2xl font-semibold text-ink">{t("vote.confirmedTitle")}</h1>
+        <p className="mt-3 text-sm text-ink-soft">{t("vote.confirmedBody")}</p>
       </div>
     );
   }
@@ -177,9 +179,7 @@ export default function Vote() {
     <div className="mx-auto grid max-w-3xl gap-8 lg:grid-cols-[1.3fr_1fr] lg:items-center">
       <div>
         <div className="flex items-center justify-between text-xs font-medium uppercase tracking-wide text-muted">
-          <span>
-            Question {questionPosition} sur {questionCount}
-          </span>
+          <span>{t("vote.questionOf", { position: questionPosition, count: questionCount })}</span>
           <span>{percent}%</span>
         </div>
         <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-line/60">
@@ -190,7 +190,7 @@ export default function Vote() {
         </div>
 
         <h1 className="mt-6 text-2xl font-semibold leading-snug text-ink">
-          {question.prompt.fr}
+          {resolveLocalizedText(question.prompt, lang)}
         </h1>
 
         <Card className="mt-6">
@@ -209,7 +209,7 @@ export default function Vote() {
                       checked={selected.includes(option.id)}
                       onChange={() => toggleOption(option.id, type === "multiple_choice")}
                     />
-                    <span className="text-ink">{option.labels.fr}</span>
+                    <span className="text-ink">{resolveLocalizedText(option.labels, lang)}</span>
                   </label>
                 ))}
               </fieldset>
@@ -217,9 +217,7 @@ export default function Vote() {
 
           {type === "ranking" && "options" in question.question_type && (
             <fieldset className="flex flex-col gap-3">
-              <legend className="text-xs text-muted">
-                Cliquez les options dans votre ordre de préférence (1 = préférée).
-              </legend>
+              <legend className="text-xs text-muted">{t("vote.rankingHint")}</legend>
               {question.question_type.options.map((option) => {
                 const rank = selected.indexOf(option.id);
                 return (
@@ -238,7 +236,7 @@ export default function Vote() {
                     >
                       {rank >= 0 ? rank + 1 : ""}
                     </span>
-                    <span className="text-ink">{option.labels.fr}</span>
+                    <span className="text-ink">{resolveLocalizedText(option.labels, lang)}</span>
                   </button>
                 );
               })}
@@ -297,15 +295,15 @@ export default function Vote() {
                     onChange={(e) =>
                       setNumericValue(e.target.value === "" ? null : Number(e.target.value))
                     }
-                    placeholder="Votre réponse"
+                    placeholder={t("vote.numberPlaceholder")}
                   />
                   {(bounds.min != null || bounds.max != null) && (
                     <p className="text-xs text-muted">
                       {bounds.min != null && bounds.max != null
-                        ? `Entre ${bounds.min} et ${bounds.max}`
+                        ? t("vote.numberBoundsBoth", { min: bounds.min, max: bounds.max })
                         : bounds.min != null
-                          ? `Minimum ${bounds.min}`
-                          : `Maximum ${bounds.max}`}
+                          ? t("vote.numberBoundsMin", { min: bounds.min })
+                          : t("vote.numberBoundsMax", { max: bounds.max ?? 0 })}
                     </p>
                   )}
                 </div>
@@ -324,18 +322,18 @@ export default function Vote() {
                   : undefined
               }
               onChange={(e) => setTextValue(e.target.value)}
-              placeholder="Votre réponse"
+              placeholder={t("vote.textPlaceholder")}
             />
           )}
 
           {type === "majority_judgment" && "options" in question.question_type && (
             <fieldset className="flex flex-col gap-4">
-              <legend className="text-xs text-muted">
-                Attribuez une mention à chaque proposition.
-              </legend>
+              <legend className="text-xs text-muted">{t("vote.majorityJudgmentHint")}</legend>
               {question.question_type.options.map((option) => (
                 <div key={option.id} className="flex flex-col gap-2">
-                  <span className="text-sm font-medium text-ink">{option.labels.fr}</span>
+                  <span className="text-sm font-medium text-ink">
+                    {resolveLocalizedText(option.labels, lang)}
+                  </span>
                   <div className="flex flex-wrap gap-1.5">
                     {MAJORITY_JUDGMENT_MENTIONS.map((mention) => {
                       const selected = mentions[option.id] === mention.value;
@@ -354,7 +352,7 @@ export default function Vote() {
                             transform: selected ? "translateY(-1px)" : undefined,
                           }}
                         >
-                          {mention.label}
+                          {t(mention.labelKey)}
                         </button>
                       );
                     })}
@@ -375,18 +373,15 @@ export default function Vote() {
             onClick={handleSubmit}
             disabled={!canSubmit || submitting}
           >
-            {submitting ? "Envoi…" : "Voter"}
+            {submitting ? t("vote.submitting") : t("vote.submit")}
           </Button>
         </Card>
       </div>
 
       <Card className="hidden bg-accent-soft text-center lg:block">
         <p className="text-4xl">🗳️</p>
-        <p className="mt-4 font-medium text-ink">Votre participation est importante !</p>
-        <p className="mt-2 text-sm text-ink-soft">
-          Cette consultation utilise une méthode de calcul transparente — le résultat
-          sera expliqué, pas seulement affiché.
-        </p>
+        <p className="mt-4 font-medium text-ink">{t("vote.sidebarTitle")}</p>
+        <p className="mt-2 text-sm text-ink-soft">{t("vote.sidebarBody")}</p>
       </Card>
     </div>
   );

@@ -116,15 +116,18 @@ impl Form {
     }
 
     /// Ajoute une question en fin de formulaire et lui assigne
-    /// automatiquement la position suivante.
+    /// automatiquement la position suivante. `prompt` est déjà une
+    /// table langue -> texte (§1.1 "multilinguisme natif"), comme
+    /// `QuestionOption::labels` — c'est à l'appelant de garantir la
+    /// présence d'au moins "fr" (validé côté route HTTP, cf.
+    /// `agoravote-api::create_form`), pas à ce constructeur de portée
+    /// générale de l'imposer.
     pub fn add_question(
         &mut self,
-        prompt_fr: impl Into<String>,
+        prompt: HashMap<String, String>,
         question_type: QuestionType,
         required: bool,
     ) -> Id {
-        let mut prompt = HashMap::new();
-        prompt.insert("fr".to_string(), prompt_fr.into());
         let position = self.questions.len() as u32;
         let question = Question {
             id: Id::new_v4(),

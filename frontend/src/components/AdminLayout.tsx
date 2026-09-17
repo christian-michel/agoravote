@@ -1,6 +1,9 @@
 import { useState, type ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
+import { useLanguage } from "../i18n/LanguageContext";
+import { LanguageSwitcher } from "../i18n/LanguageSwitcher";
+import type { TranslationKey } from "../i18n/translations/fr";
 import {
   CampaignsIcon,
   DashboardIcon,
@@ -10,7 +13,7 @@ import {
 } from "./icons";
 
 interface NavItem {
-  label: string;
+  labelKey: TranslationKey;
   href?: string;
   icon: (props: { className?: string }) => ReactNode;
 }
@@ -20,11 +23,11 @@ interface NavItem {
  * disposition des planches fournies (cf. docs/DEVLOG.md itération 7)
  * sans jamais faire croire qu'une fonction existe. */
 const NAV_ITEMS: NavItem[] = [
-  { label: "Tableau de bord", href: "/admin", icon: DashboardIcon },
-  { label: "Campagnes", href: "/admin/campagnes", icon: CampaignsIcon },
-  { label: "Modules", href: "/admin/modules", icon: ModulesIcon },
-  { label: "Utilisateurs", icon: UsersIcon },
-  { label: "Paramètres", icon: SettingsIcon },
+  { labelKey: "nav.dashboard", href: "/admin", icon: DashboardIcon },
+  { labelKey: "nav.campaigns", href: "/admin/campagnes", icon: CampaignsIcon },
+  { labelKey: "nav.modules", href: "/admin/modules", icon: ModulesIcon },
+  { labelKey: "nav.users", icon: UsersIcon },
+  { labelKey: "nav.settings", icon: SettingsIcon },
 ];
 
 /** Disposition avec nav latérale pour les écrans d'administration
@@ -38,6 +41,7 @@ const NAV_ITEMS: NavItem[] = [
  * cf. docs/DEVLOG.md itération 7). */
 export function AdminLayout({ children }: { children: ReactNode }) {
   const { user, logout } = useAuth();
+  const { t } = useLanguage();
   const location = useLocation();
   const [drawerOpen, setDrawerOpen] = useState(false);
 
@@ -66,23 +70,23 @@ export function AdminLayout({ children }: { children: ReactNode }) {
           if (!item.href) {
             return (
               <span
-                key={item.label}
+                key={item.labelKey}
                 className="flex cursor-not-allowed items-center justify-between gap-3 rounded-lg px-3 py-2 text-sm text-muted/70"
-                title="Bientôt disponible"
+                title={t("nav.soonTitle")}
               >
                 <span className="flex items-center gap-3">
                   <Icon className="shrink-0" />
-                  {item.label}
+                  {t(item.labelKey)}
                 </span>
                 <span className="rounded-full bg-paper px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted">
-                  Bientôt
+                  {t("nav.soon")}
                 </span>
               </span>
             );
           }
           return (
             <Link
-              key={item.label}
+              key={item.labelKey}
               to={item.href}
               onClick={() => setDrawerOpen(false)}
               className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
@@ -90,11 +94,15 @@ export function AdminLayout({ children }: { children: ReactNode }) {
               }`}
             >
               <Icon className="shrink-0" />
-              {item.label}
+              {t(item.labelKey)}
             </Link>
           );
         })}
       </nav>
+
+      <div className="border-t border-line px-4 py-3">
+        <LanguageSwitcher className="w-full" />
+      </div>
 
       {user && (
         <div className="flex items-center gap-3 border-t border-line px-4 py-4">
@@ -104,7 +112,7 @@ export function AdminLayout({ children }: { children: ReactNode }) {
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-medium text-ink">{user.display_name}</p>
             <button type="button" onClick={() => logout()} className="text-xs text-muted hover:text-ink">
-              Se déconnecter
+              {t("nav.logout")}
             </button>
           </div>
         </div>
@@ -120,7 +128,7 @@ export function AdminLayout({ children }: { children: ReactNode }) {
           type="button"
           onClick={() => setDrawerOpen(true)}
           className="flex h-9 w-9 items-center justify-center rounded-md border border-line text-ink-soft"
-          aria-label="Ouvrir le menu"
+          aria-label={t("nav.openMenu")}
         >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round">
             <path d="M4 6h16M4 12h16M4 18h16" />
@@ -134,7 +142,7 @@ export function AdminLayout({ children }: { children: ReactNode }) {
       {drawerOpen && (
         <button
           type="button"
-          aria-label="Fermer le menu"
+          aria-label={t("nav.closeMenu")}
           onClick={() => setDrawerOpen(false)}
           className="fixed inset-0 z-30 bg-ink/30 lg:hidden"
         />

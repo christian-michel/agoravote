@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api, ApiError, type Campaign, type Form, type ModuleManifest } from "../api/client";
+import { useLanguage, pluralize } from "../i18n/LanguageContext";
 import { Alert, Button, Card, StatusBadge } from "../components/ui";
 import { FormBuilder } from "../components/FormBuilder";
 import { TallyPanel } from "../components/TallyPanel";
@@ -9,6 +10,7 @@ import { MajorityJudgmentPanel } from "../components/MajorityJudgmentPanel";
 import { rememberCampaign } from "../lib/recentCampaigns";
 
 export default function CampaignManage() {
+  const { t, lang } = useLanguage();
   const { campaignId } = useParams<{ campaignId: string }>();
   const [campaign, setCampaign] = useState<Campaign | null>(null);
   const [form, setForm] = useState<Form | null>(null);
@@ -37,7 +39,7 @@ export default function CampaignManage() {
       const { voting_methods } = await api.listModules();
       setModules(voting_methods);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Impossible de charger la campagne.");
+      setError(err instanceof ApiError ? err.message : t("campaignManage.loadError"));
     } finally {
       setLoading(false);
     }
@@ -54,7 +56,7 @@ export default function CampaignManage() {
     try {
       setCampaign(await api.publishCampaign(campaignId));
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "La publication a échoué.");
+      setError(err instanceof ApiError ? err.message : t("campaignManage.publishError"));
     } finally {
       setBusy(false);
     }
@@ -67,20 +69,20 @@ export default function CampaignManage() {
     try {
       setCampaign(await api.closeCampaign(campaignId));
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "La clôture a échoué.");
+      setError(err instanceof ApiError ? err.message : t("campaignManage.closeError"));
     } finally {
       setBusy(false);
     }
   }
 
-  if (loading) return <p className="text-sm text-muted">Chargement…</p>;
+  if (loading) return <p className="text-sm text-muted">{t("common.loading")}</p>;
   if (error && !campaign) return <Alert>{error}</Alert>;
   if (!campaign || !campaignId) return null;
 
   return (
     <div className="flex flex-col gap-8">
       <Link to="/admin/campagnes" className="text-xs text-muted hover:text-ink">
-        ← Campagnes
+        {t("campaignManage.back")}
       </Link>
       <div className="flex items-center justify-between">
         <div>
@@ -88,19 +90,21 @@ export default function CampaignManage() {
           <div className="mt-2 flex items-center gap-3">
             <StatusBadge status={campaign.status} />
             <span className="text-xs text-muted">
-              Créée le {new Date(campaign.created_at).toLocaleDateString("fr-FR")}
+              {t("campaignManage.createdOn", {
+                date: new Date(campaign.created_at).toLocaleDateString(lang),
+              })}
             </span>
           </div>
         </div>
         <div className="flex gap-3">
           {campaign.status === "Draft" && form && (
             <Button onClick={handlePublish} disabled={busy}>
-              Publier la campagne
+              {t("campaignManage.publish")}
             </Button>
           )}
           {campaign.status === "Published" && (
             <Button variant="secondary" onClick={handleClose} disabled={busy}>
-              Clôturer la campagne
+              {t("campaignManage.close")}
             </Button>
           )}
         </div>
@@ -115,9 +119,14 @@ export default function CampaignManage() {
       {campaign.status === "Draft" && form && (
         <Card>
           <p className="text-sm text-ink-soft">
-            Le formulaire est prêt ({form.questions.length} question
-            {form.questions.length > 1 ? "s" : ""}). Publiez la campagne pour
-            commencer à recevoir des votes.
+            {t("campaignManage.formReadyPrefix")}
+            {form.questions.length}{" "}
+            {pluralize(
+              form.questions.length,
+              t("campaignManage.formReadyQuestion"),
+              t("campaignManage.formReadyQuestions"),
+            )}
+            {t("campaignManage.formReadySuffix")}
           </p>
         </Card>
       )}
@@ -125,13 +134,13 @@ export default function CampaignManage() {
       {campaign.status !== "Draft" && form && (
         <div className="flex flex-col gap-6">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-ink">Questions</h2>
+            <h2 className="text-lg font-semibold text-ink">{t("campaignManage.questions")}</h2>
             {form.questions.length > 1 && (
               <Link
                 to={`/admin/campagnes/${campaignId}/analyse`}
                 className="text-sm text-accent hover:underline"
               >
-                Analyse et visualisation →
+                {t("campaignManage.analysisLink")}
               </Link>
             )}
           </div>
@@ -143,13 +152,13 @@ export default function CampaignManage() {
                     to={`/campagnes/${campaignId}/questions/${question.id}/voter`}
                     className="self-start text-sm text-accent hover:underline"
                   >
-                    Ouvrir l'écran de vote citoyen →
+                    {t("campaignManage.openVote")}
                   </Link>
                   <Link
                     to={`/campagnes/${campaignId}/questions/${question.id}/inviter`}
                     className="self-start text-sm text-accent hover:underline"
                   >
-                    Page d'invitation (QR code) →
+                    {t("campaignManage.openInvite")}
                   </Link>
                 </div>
               )}

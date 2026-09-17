@@ -1,4 +1,5 @@
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode } from "react";
+import { useLanguage } from "../i18n/LanguageContext";
 
 /** Bouton d'action affirmative (voter, publier, confirmer) — utilise
  * l'unique accent du système de design (cf. DESIGN.md). Pour toute
@@ -96,10 +97,11 @@ export function StatCard({
  * jamais un jargon système (cf. skill de design : nommer ce que la
  * personne comprend, pas comment le système est construit). */
 export function StatusBadge({ status }: { status: "Draft" | "Published" | "Closed" }) {
-  const labels: Record<typeof status, string> = {
-    Draft: "Brouillon",
-    Published: "Publiée",
-    Closed: "Clôturée",
+  const { t } = useLanguage();
+  const labelKeys: Record<typeof status, "status.draft" | "status.published" | "status.closed"> = {
+    Draft: "status.draft",
+    Published: "status.published",
+    Closed: "status.closed",
   };
   const styles: Record<typeof status, string> = {
     Draft: "bg-[var(--color-status-neutral-soft)] text-ink-soft",
@@ -108,7 +110,7 @@ export function StatusBadge({ status }: { status: "Draft" | "Published" | "Close
   };
   return (
     <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${styles[status]}`}>
-      {labels[status]}
+      {t(labelKeys[status])}
     </span>
   );
 }

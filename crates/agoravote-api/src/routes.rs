@@ -619,6 +619,12 @@ async fn create_form(
 
     let mut form = Form::new(campaign_id);
     for q in req.questions {
+        let has_french = q.prompt.get("fr").is_some_and(|s| !s.trim().is_empty());
+        if !has_french {
+            return Err(bad_request(
+                "l'intitulé de chaque question doit au moins être fourni en français (\"fr\")",
+            ));
+        }
         form.add_question(q.prompt, q.question_type, q.required);
     }
 
@@ -1454,7 +1460,7 @@ mod tests {
             &router,
             &format!("/campaigns/{campaign_id}/form"),
             serde_json::json!({"questions": [{
-                "prompt": "Test ?", "type": "single_choice", "required": true,
+                "prompt": {"fr": "Test ?"}, "type": "single_choice", "required": true,
                 "options": [{"id": "a", "labels": {"fr": "A"}}, {"id": "b", "labels": {"fr": "B"}}]
             }]}),
             Some(&organizer_token),
@@ -1540,7 +1546,7 @@ mod tests {
             &format!("/campaigns/{campaign_id}/form"),
             serde_json::json!({
                 "questions": [{
-                    "prompt": "Une question ?",
+                    "prompt": {"fr": "Une question ?"},
                     "type": "single_choice",
                     "required": true,
                     "options": [{"id": "a", "labels": {"fr": "Option A"}}]
@@ -1609,6 +1615,99 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn creation_formulaire_accepte_un_intitule_multilingue() {
+        let router = test_router();
+        let organization_id = Id::new_v4();
+        let (_, body) = post_json(
+            &router,
+            "/auth/register",
+            serde_json::json!({
+                "organization_id": organization_id,
+                "email": "multilingue@example.test",
+                "password": "un-mot-de-passe-suffisamment-long",
+                "display_name": "Test",
+            }),
+            None,
+        )
+        .await;
+        let token = body["token"].as_str().unwrap().to_string();
+        let (_, campaign) = post_json(
+            &router,
+            "/campaigns",
+            serde_json::json!({ "organization_id": organization_id, "title": "Multilingue" }),
+            Some(&token),
+        )
+        .await;
+        let campaign_id = campaign["id"].as_str().unwrap();
+
+        let (status, form) = post_json(
+            &router,
+            &format!("/campaigns/{campaign_id}/form"),
+            serde_json::json!({
+                "questions": [{
+                    "prompt": {"fr": "Quelle est votre couleur préférée ?", "en": "What is your favorite color?"},
+                    "type": "single_choice",
+                    "required": true,
+                    "options": [{"id": "a", "labels": {"fr": "Rouge", "en": "Red"}}]
+                }]
+            }),
+            Some(&token),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(
+            form["questions"][0]["prompt"]["en"],
+            "What is your favorite color?"
+        );
+        assert_eq!(
+            form["questions"][0]["question_type"]["options"][0]["labels"]["en"],
+            "Red"
+        );
+    }
+
+    #[tokio::test]
+    async fn creation_formulaire_sans_intitule_francais_est_refusee() {
+        let router = test_router();
+        let organization_id = Id::new_v4();
+        let (_, body) = post_json(
+            &router,
+            "/auth/register",
+            serde_json::json!({
+                "organization_id": organization_id,
+                "email": "sans-fr@example.test",
+                "password": "un-mot-de-passe-suffisamment-long",
+                "display_name": "Test",
+            }),
+            None,
+        )
+        .await;
+        let token = body["token"].as_str().unwrap().to_string();
+        let (_, campaign) = post_json(
+            &router,
+            "/campaigns",
+            serde_json::json!({ "organization_id": organization_id, "title": "Sans fr" }),
+            Some(&token),
+        )
+        .await;
+        let campaign_id = campaign["id"].as_str().unwrap();
+
+        let (status, body) = post_json(
+            &router,
+            &format!("/campaigns/{campaign_id}/form"),
+            serde_json::json!({
+                "questions": [{
+                    "prompt": {"en": "English only"},
+                    "type": "text"
+                }]
+            }),
+            Some(&token),
+        )
+        .await;
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+        assert!(body["error"].as_str().unwrap().contains("français"));
     }
 
     #[tokio::test]
@@ -1860,7 +1959,7 @@ mod tests {
         let campaign_id = campaign["id"].as_str().unwrap().to_string();
 
         let mut question = question_json;
-        question["prompt"] = serde_json::json!("Question de test ?");
+        question["prompt"] = serde_json::json!({"fr": "Question de test ?"});
         question["required"] = serde_json::json!(true);
 
         let (_, form) = post_json(

@@ -1,5 +1,6 @@
 import type { ResultSet } from "../api/client";
-import { MAJORITY_JUDGMENT_MENTIONS, mentionColor, mentionLabel } from "../lib/majorityJudgmentMentions";
+import { MAJORITY_JUDGMENT_MENTIONS, mentionColor, mentionLabelKey } from "../lib/majorityJudgmentMentions";
+import { useLanguage, pluralize } from "../i18n/LanguageContext";
 
 /** Reflète `MentionBreakdown` côté Rust
  * (`agoravote_voting::majority_judgment`) — cf. sa doc pour le détail
@@ -30,6 +31,7 @@ export function MajorityJudgmentResults({
   result: ResultSet;
   optionLabel: (optionId: string) => string;
 }) {
+  const { t } = useLanguage();
   const breakdowns = (result.outcome.metadata["mention_breakdown"] ?? {}) as Record<
     string,
     MentionBreakdown
@@ -63,7 +65,7 @@ export function MajorityJudgmentResults({
                   color: mentionColor(median),
                 }}
               >
-                {mentionLabel(median)}
+                {t(mentionLabelKey(median))}
               </span>
               <span className="text-xs italic text-muted">(≥{badge}&nbsp;%)</span>
             </div>
@@ -76,7 +78,7 @@ export function MajorityJudgmentResults({
                   return (
                     <div
                       key={mention.value}
-                      title={`${mention.label} : ${Math.round(pct)} %`}
+                      title={`${t(mention.labelKey)} : ${Math.round(pct)} %`}
                       className="flex items-center justify-center text-[11px] font-semibold text-white"
                       style={{ width: `${pct}%`, backgroundColor: mention.color }}
                     >
@@ -93,13 +95,13 @@ export function MajorityJudgmentResults({
                 }}
               >
                 <span className="absolute -top-2 left-1/2 -translate-x-1/2 whitespace-nowrap rounded border border-line bg-surface px-1.5 py-0.5 text-[10px] font-bold text-ink-soft">
-                  ▼ MÉDIANE
+                  {t("mj.median")}
                 </span>
               </div>
             </div>
 
             <p className="mt-2 text-right text-xs italic text-muted">
-              {totalVotes} vote{totalVotes > 1 ? "s" : ""} au total
+              {totalVotes} {pluralize(totalVotes, t("mj.totalVotesSingular"), t("mj.totalVotesPlural"))}
             </p>
           </div>
         );
@@ -107,7 +109,7 @@ export function MajorityJudgmentResults({
 
       <div className="rounded-md border border-line bg-surface p-3">
         <p className="text-xs font-medium uppercase tracking-wide text-muted">
-          Légende des mentions
+          {t("mj.mentionsLegend")}
         </p>
         <div className="mt-2 flex flex-wrap gap-3">
           {MAJORITY_JUDGMENT_MENTIONS.map((mention) => (
@@ -116,7 +118,7 @@ export function MajorityJudgmentResults({
                 className="h-3 w-5 rounded-sm border border-line"
                 style={{ backgroundColor: mention.color }}
               />
-              {mention.label}
+              {t(mention.labelKey)}
             </span>
           ))}
         </div>

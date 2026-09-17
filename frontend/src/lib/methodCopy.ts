@@ -1,26 +1,38 @@
+import type { TranslationKey } from "../i18n/translations/fr";
+
 /**
  * Libellés/descriptions éditoriales pour les méthodes du catalogue
  * natif — texte d'interface, pas une donnée renvoyée par l'API (le
  * manifeste ne porte qu'un id/version/kind/entrées/sorties, cf.
- * docs/openapi.yaml `ModuleManifest`). Partagé entre `ModulesPage` et
- * `TallyPanel` pour ne pas dupliquer ce texte à deux endroits.
+ * docs/openapi.yaml `ModuleManifest`). Partagé entre `ModulesPage`,
+ * `TallyPanel`, `Results` et `Analysis` pour ne pas dupliquer ce texte
+ * à plusieurs endroits. Clés de traduction plutôt que texte en dur :
+ * résolues via `t()` au point d'appel (cf. `getMethodCopy`).
  */
-export const METHOD_COPY: Record<string, { label: string; description: string }> = {
+const METHOD_COPY_KEYS: Record<string, { labelKey: TranslationKey; descriptionKey: TranslationKey }> = {
   "voting.majority": {
-    label: "Majorité simple",
-    description: "L'option qui obtient le plus de suffrages exprimés l'emporte.",
+    labelKey: "method.majority.label",
+    descriptionKey: "method.majority.description",
   },
   "voting.approval": {
-    label: "Vote par approbation",
-    description: "Chaque participant peut approuver plusieurs options sans les classer.",
+    labelKey: "method.approval.label",
+    descriptionKey: "method.approval.description",
   },
   "voting.score": {
-    label: "Vote par score",
-    description: "Chaque participant attribue une note à une ou plusieurs options ; la moyenne décide.",
+    labelKey: "method.score.label",
+    descriptionKey: "method.score.description",
   },
   "voting.majority_judgment": {
-    label: "Jugement majoritaire",
-    description:
-      "Chaque participant attribue une mention (de « Très défavorable » à « Très favorable ») à chaque option ; la médiane des mentions décide, départagée par les pourcentages au-dessus/en-dessous.",
+    labelKey: "method.majorityJudgment.label",
+    descriptionKey: "method.majorityJudgment.description",
   },
 };
+
+export function getMethodCopy(
+  methodId: string,
+  t: (key: TranslationKey) => string,
+): { label: string; description: string } | undefined {
+  const keys = METHOD_COPY_KEYS[methodId];
+  if (!keys) return undefined;
+  return { label: t(keys.labelKey), description: t(keys.descriptionKey) };
+}

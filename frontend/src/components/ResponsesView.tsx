@@ -1,4 +1,6 @@
 import type { Question, QuestionResponses } from "../api/client";
+import { useLanguage, pluralize } from "../i18n/LanguageContext";
+import { resolveLocalizedText } from "../i18n/content";
 import { BarList } from "./charts";
 
 /**
@@ -16,14 +18,17 @@ export function ResponsesView({
   responses: QuestionResponses;
   questionType: Question["question_type"];
 }) {
+  const { t, lang } = useLanguage();
+
   if (responses.kind === "text") {
     if (responses.values.length === 0) {
-      return <p className="text-sm text-muted">Aucune réponse pour le moment.</p>;
+      return <p className="text-sm text-muted">{t("responses.noneYet")}</p>;
     }
     return (
       <div className="flex flex-col gap-2">
         <p className="text-xs text-muted">
-          {responses.values.length} réponse{responses.values.length > 1 ? "s" : ""}
+          {responses.values.length}{" "}
+          {pluralize(responses.values.length, t("responses.responseSingular"), t("responses.responsePlural"))}
         </p>
         <ul className="flex flex-col gap-2">
           {responses.values.map((value, i) => (
@@ -31,7 +36,7 @@ export function ResponsesView({
               key={i}
               className="rounded-md border border-line bg-paper px-3 py-2 text-sm text-ink-soft"
             >
-              {value || <span className="italic text-muted">(réponse vide)</span>}
+              {value || <span className="italic text-muted">{t("responses.emptyAnswer")}</span>}
             </li>
           ))}
         </ul>
@@ -42,7 +47,7 @@ export function ResponsesView({
   if (responses.kind === "numeric") {
     const { summary } = responses;
     if (!summary) {
-      return <p className="text-sm text-muted">Aucune réponse pour le moment.</p>;
+      return <p className="text-sm text-muted">{t("responses.noneYet")}</p>;
     }
     // Histogramme uniquement pour une échelle bornée (petit nombre de
     // valeurs entières possibles) : une question "Nombre" libre n'a
@@ -67,30 +72,31 @@ export function ResponsesView({
     return (
       <div className="flex flex-col gap-4">
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-          <Stat label="Réponses" value={summary.count} />
-          <Stat label="Moyenne" value={summary.mean} />
-          <Stat label="Médiane" value={summary.median} />
-          <Stat label="Min" value={summary.min} />
-          <Stat label="Max" value={summary.max} />
+          <Stat label={t("responses.statCount")} value={summary.count} />
+          <Stat label={t("responses.statMean")} value={summary.mean} />
+          <Stat label={t("responses.statMedian")} value={summary.median} />
+          <Stat label={t("responses.statMin")} value={summary.min} />
+          <Stat label={t("responses.statMax")} value={summary.max} />
         </div>
-        {histogram && <BarList items={histogram} unit=" réponse(s)" />}
+        {histogram && <BarList items={histogram} unit={t("responses.unitAnswer")} />}
       </div>
     );
   }
 
   // responses.kind === "ranking"
   if (responses.rankings.length === 0) {
-    return <p className="text-sm text-muted">Aucun classement pour le moment.</p>;
+    return <p className="text-sm text-muted">{t("responses.noneRankingYet")}</p>;
   }
   const options =
     "options" in questionType
-      ? new Map(questionType.options.map((o) => [o.id, o.labels.fr]))
+      ? new Map(questionType.options.map((o) => [o.id, resolveLocalizedText(o.labels, lang)]))
       : new Map<string, string>();
   return (
     <div className="flex flex-col gap-2">
       <p className="text-xs text-muted">
-        {responses.rankings.length} classement{responses.rankings.length > 1 ? "s" : ""} —
-        donnée brute, pas de méthode de calcul de vainqueur (hors MVP)
+        {responses.rankings.length}{" "}
+        {pluralize(responses.rankings.length, t("responses.rankingSingular"), t("responses.rankingPlural"))}{" "}
+        — {t("responses.rankingRawNote")}
       </p>
       <ul className="flex flex-col gap-2">
         {responses.rankings.map((ranking, i) => (

@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, type Question, type QuestionResponses } from "../api/client";
+import { useLanguage } from "../i18n/LanguageContext";
+import { resolveLocalizedText } from "../i18n/content";
 import { Card } from "./ui";
 import { ResponsesView } from "./ResponsesView";
 
@@ -18,6 +20,7 @@ export function ResponsesPanel({
   campaignId: string;
   question: Question;
 }) {
+  const { t, lang } = useLanguage();
   const [responses, setResponses] = useState<QuestionResponses | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -32,21 +35,21 @@ export function ResponsesPanel({
   return (
     <Card>
       <div className="flex items-start justify-between gap-4">
-        <h3 className="font-medium text-ink">{question.prompt.fr}</h3>
+        <h3 className="font-medium text-ink">{resolveLocalizedText(question.prompt, lang)}</h3>
         <Link
           to={`/campagnes/${campaignId}/questions/${question.id}/resultats`}
           className="shrink-0 text-xs text-accent hover:underline"
         >
-          Page de résultats publique →
+          {t("tally.publicResultsLink")}
         </Link>
       </div>
       <div className="mt-4 border-t border-line pt-4">
         {loading ? (
-          <p className="text-sm text-muted">Chargement…</p>
+          <p className="text-sm text-muted">{t("common.loading")}</p>
         ) : responses ? (
           <ResponsesView responses={responses} questionType={question.question_type} />
         ) : (
-          <p className="text-sm text-muted">Impossible de charger les réponses.</p>
+          <p className="text-sm text-muted">{t("responses.loadError")}</p>
         )}
       </div>
     </Card>

@@ -32,7 +32,12 @@ pub struct CreateFormRequest {
 
 #[derive(Debug, Deserialize)]
 pub struct CreateQuestionRequest {
-    pub prompt: String,
+    /// Intitulé traduit, par code langue (§1.1 multilinguisme natif) —
+    /// même forme que `QuestionOption::labels`. "fr" est requis
+    /// (validé par `routes.rs::create_form`) : c'est la langue de
+    /// référence du projet, toujours présente même si l'organisateur
+    /// ajoute d'autres traductions.
+    pub prompt: HashMap<String, String>,
     #[serde(flatten)]
     pub question_type: QuestionType,
     #[serde(default)]

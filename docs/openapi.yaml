@@ -663,7 +663,14 @@ components:
       type: object
       required: [prompt, type]
       properties:
-        prompt: { type: string }
+        prompt:
+          type: object
+          additionalProperties: { type: string }
+          description: >
+            Intitulé traduit, par code langue (§1.1 multilinguisme natif) —
+            même forme que QuestionOption.labels. "fr" est requis (refusé
+            avec 400 sinon), les autres langues sont optionnelles.
+          example: { fr: "Quelle est votre couleur préférée ?", en: "What is your favorite color?" }
         type:
           type: string
           enum: [single_choice, multiple_choice, text, number, scale, ranking, majority_judgment]

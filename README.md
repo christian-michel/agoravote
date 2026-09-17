@@ -265,6 +265,15 @@ bloqueraient probablement une mise en production :
    (cf. `crates/agoravote-g1/README.md`, `docs/G1_INTEGRATION.md` et
    `docs/SECURITY.md` §8 pour le détail complet et la marche à suivre).
 
+## Inspirations
+
+Le module de vote par jugement majoritaire (`voting.majority_judgment`)
+et la page d'invitation publique avec QR code s'appuient sur des idées
+repérées dans [Direct Democracy Voting](https://gitlab.com/human_web/direct_democracy_voting),
+un projet libre de vote/sondage en temps réel — voir
+`docs/DEVLOG.md` (itération 13) pour le détail de ce qui a été repris
+et transposé à l'architecture modulaire d'AgoraVote.
+
 ## Licence
 
 `AGPL-3.0-or-later` provisoire dans `Cargo.toml` — à confirmer par la
