@@ -13,6 +13,7 @@ import CampaignManage from "./pages/CampaignManage";
 import Analysis from "./pages/Analysis";
 import Vote from "./pages/Vote";
 import Results from "./pages/Results";
+import CampaignInvite from "./pages/CampaignInvite";
 
 /** Protège les routes d'administration : redirige vers /connexion si
  * personne n'est authentifié. Pendant la vérification initiale du
@@ -79,6 +80,10 @@ export default function App() {
           <Route
             path="/campagnes/:campaignId/questions/:questionId/voter"
             element={<Shell><Vote /></Shell>}
+          />
+          <Route
+            path="/campagnes/:campaignId/questions/:questionId/inviter"
+            element={<Shell><CampaignInvite /></Shell>}
           />
           <Route
             path="/campagnes/:campaignId/questions/:questionId/resultats"

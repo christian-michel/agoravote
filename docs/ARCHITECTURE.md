@@ -63,6 +63,7 @@ de l'exigence du §4 :
 | `majority.rs` | `voting.majority` | `single_choice` | Quorum calculé sur `eligible_voters`, gère les égalités (plusieurs gagnants) |
 | `approval.rs` | `voting.approval` | `multiple_choice` | `seats` détermine combien d'options gagnent |
 | `score.rs` | `voting.score` | `score` | Moyenne par option, gère les notations partielles |
+| `majority_judgment.rs` | `voting.majority_judgment` | `majority_judgment` | Médiane des mentions par option (1-6, "Ne sait pas" neutralisé en "Sans avis"), départage par % au-dessus/en-dessous de la médiane |
 | `registry.rs` | `VotingMethodRegistry` | — | Table `id → Arc<dyn VotingMethod>`, préfigure le registre mixte natif/WASM du §6.1 |
 
 Chaque méthode est un type unitaire (`struct Foo;`) sans état : voir
@@ -200,8 +201,8 @@ compilation TypeScript plutôt qu'en bug silencieux à l'exécution.
 | `src/components/charts.tsx` | Jauge de participation, liste à barres, donut — SVG inline, palette de la skill dataviz (cf. `index.css`) |
 | `src/components/icons.tsx` | Icônes trait dessinées à la main (pas de dépendance externe) |
 | `src/components/FormBuilder.tsx` | Bibliothèque de questions (six types déjà acceptés par l'API) + canevas |
-| `src/components/` (autres) | UI de base (`ui.tsx`), panneau de dépouillement — choix unique/multiple (`TallyPanel.tsx`) —, panneau/vue de réponses brutes — texte/nombre/échelle/classement (`ResponsesPanel.tsx`/`ResponsesView.tsx`, itération 12) |
-| `src/pages/` | Un fichier par écran (cf. `frontend/README.md` pour la table complète) — inclut depuis l'itération 7 `CampaignsList.tsx`, `ModulesPage.tsx` et `Analysis.tsx`, et depuis l'itération 8 `G1Login.tsx` (planche 17 de l'addendum, `/connexion-g1`) |
+| `src/components/` (autres) | UI de base (`ui.tsx`), panneau de dépouillement — choix unique/multiple (`TallyPanel.tsx`) —, panneau/vue de réponses brutes — texte/nombre/échelle/classement (`ResponsesPanel.tsx`/`ResponsesView.tsx`, itération 12), panneau/vue jugement majoritaire (`MajorityJudgmentPanel.tsx`/`MajorityJudgmentResults.tsx`, itération 13) |
+| `src/pages/` | Un fichier par écran (cf. `frontend/README.md` pour la table complète) — inclut depuis l'itération 7 `CampaignsList.tsx`, `ModulesPage.tsx` et `Analysis.tsx`, depuis l'itération 8 `G1Login.tsx` (planche 17 de l'addendum, `/connexion-g1`), et depuis l'itération 13 `CampaignInvite.tsx` (page d'invitation publique avec QR code, `/campagnes/:id/questions/:id/inviter`) |
 | `src/lib/methodCopy.ts` | Libellés/descriptions éditoriales des méthodes de vote natives, partagés entre `ModulesPage` et `TallyPanel` |
 | `DESIGN.md` | Direction visuelle et sa justification |
 

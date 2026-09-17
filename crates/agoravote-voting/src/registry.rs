@@ -15,7 +15,7 @@ use std::sync::Arc;
 use agoravote_core::module::ModuleManifest;
 use agoravote_core::voting_method::VotingMethod;
 
-use crate::{Approval, MajoritySimple, ScoreVoting};
+use crate::{Approval, MajorityJudgment, MajoritySimple, ScoreVoting};
 
 /// Registre en mémoire des méthodes de vote disponibles, indexées par
 /// leur identifiant de module (ex: "voting.majority").
@@ -48,6 +48,9 @@ impl VotingMethodRegistry {
         let score = Arc::new(ScoreVoting);
         methods.insert(score.id(), score);
 
+        let majority_judgment = Arc::new(MajorityJudgment);
+        methods.insert(majority_judgment.id(), majority_judgment);
+
         Self { methods }
     }
 
@@ -79,12 +82,13 @@ mod tests {
     use super::*;
 
     #[test]
-    fn le_registre_expose_les_trois_methodes_du_mvp() {
+    fn le_registre_expose_les_quatre_methodes_natives() {
         let registry = VotingMethodRegistry::with_builtin_methods();
         assert!(registry.get("voting.majority").is_some());
         assert!(registry.get("voting.approval").is_some());
         assert!(registry.get("voting.score").is_some());
+        assert!(registry.get("voting.majority_judgment").is_some());
         assert!(registry.get("voting.inconnu").is_none());
-        assert_eq!(registry.manifests().len(), 3);
+        assert_eq!(registry.manifests().len(), 4);
     }
 }

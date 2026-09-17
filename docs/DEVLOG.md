@@ -1342,3 +1342,164 @@ Frontend :
    actuel — décision produit avant travail technique).
 2. `GET /campaigns` (déjà dans `docs/ROADMAP.md`, non repris ici).
 3. Reste des listes des itérations précédentes, inchangées.
+
+## Itération 13 — jugement majoritaire et page d'invitation (idées reprises d'un projet externe)
+
+Objectif : le porteur de projet a signalé un projet externe
+(`direct_democracy_voting`, Java/Angular, dépôt cloné localement pour
+lecture du code réel — pas seulement des captures d'écran) et a
+demandé d'en extraire les idées transposables, en particulier deux
+rendus visuels appréciés : une page d'invitation publique avec QR
+code, et un affichage de résultats "jugement majoritaire" avec des
+barres empilées par mention colorée.
+
+### Ce qui a été extrait et pourquoi
+
+Le jugement majoritaire était déjà cité par le cahier des charges
+(§6.2, §15.1 : "hors MVP mais prévu dans l'architecture") — ce n'est
+donc pas une fonctionnalité hors périmètre, juste un item de la
+roadmap qui restait à faire. Décision : l'implémenter comme méthode de
+vote native à part entière plutôt que comme variante de `voting.score`
+(déjà existant, moyenne des notes) — le jugement majoritaire calcule
+une MÉDIANE, avec un départage spécifique, ce qui est un algorithme
+distinct, pas un habillage du même calcul.
+
+Point le plus intéressant du code source externe : le traitement du
+vote "Ne sait pas". Une implémentation naïve qui exclurait "Ne sait
+pas" du calcul de médiane ferait remonter en tête une option qui n'a
+reçu QUE des "Ne sait pas" (aucune mention "opinable" ne fait
+redescendre sa médiane) — un vrai biais démocratique que le projet
+externe documente avoir corrigé après-coup. Reproduit ici dès le
+départ : "Ne sait pas" (mention 6) est neutralisé en "Sans avis"
+(mention 3) pour le calcul de la médiane, tout en restant visible et
+compté dans la répartition détaillée affichée.
+
+La page d'invitation (QR code + statistiques de participation en
+direct + lien à partager) a été reprise comme nouvel écran public,
+avec un compteur de bulletins BRUT (nouvelle route `GET .../ballot_count`,
+distincte d'un résultat calculé — même principe de séparation que
+`/responses` vs `/results`, cf. itération 12).
+
+Idées du projet externe notées mais **non retenues cette itération**
+(hors de ce qui a été demandé) : mode isoloir (vote sans influence par
+les résultats en temps réel), minuteur d'expiration avec barre de
+progression colorée, tri aléatoire Fisher-Yates des propositions, chat
+en direct. Ajoutées à `docs/ROADMAP.md` comme candidates futures.
+
+### Ce qui a changé
+
+Backend :
+- `QuestionType::MajorityJudgment { options }` (nouveau variant,
+  `crates/agoravote-core/src/form.rs`) — chaque option reçoit une
+  mention entière 1-6 par bulletin (réutilise `Ballot::scores`,
+  jusqu'ici uniquement réservé pour `voting.score` sans type de
+  question ne l'atteignant réellement — cf. itération 12). Contrairement
+  à `voting.score`, une notation partielle À L'INTÉRIEUR D'UN bulletin
+  n'a pas de sens ici : `build_ballot` exige une mention pour CHAQUE
+  option de la question, ni plus ni moins.
+- Nouveau module `crates/agoravote-voting/src/majority_judgment.rs`
+  (`voting.majority_judgment`) : médiane des mentions neutralisées,
+  départage par % de mentions à/au-dessus puis en-dessous de la
+  médiane, puis par id d'option. La répartition détaillée par mention
+  (comptages ET pourcentages, y compris "Ne sait pas" non neutralisé)
+  est exposée via `TallyOutcome::metadata["mention_breakdown"]` — champ
+  libre déjà prévu pour ce genre de détail spécifique à une méthode
+  (cf. `score_scale_hint` de `voting.score`).
+- Nouvelle route `GET /campaigns/:id/questions/:id/ballot_count` :
+  compte brut de bulletins, sans dépouillement — ni un `ResultSet`, ni
+  des réponses individuelles, juste leur nombre, pour la page
+  d'invitation. Documentée dans `docs/openapi.yaml` en premier, comme
+  l'exige la convention du projet.
+- 10 nouveaux tests (7 dans `agoravote-voting` : classement, départage,
+  neutralisation, notation partielle entre bulletins, sièges multiples,
+  bulletins vides ; 3 dans `agoravote-api` : validation du bulletin,
+  dépouillement + neutralisation bout en bout, `/ballot_count`) — 26
+  tests `agoravote-api` et 18 tests `agoravote-voting` au total, tous
+  verts.
+
+Frontend :
+- Écran de vote : une ligne par option avec les 6 boutons de mention,
+  couleurs reprises À L'IDENTIQUE de la référence externe (demande
+  explicite du porteur de projet) — rouge `#d32f2f` → orange `#ff9800`
+  → jaune `#ffc107` → vert clair `#8bc34a` → vert foncé `#4caf50`, gris
+  `#9e9e9e` pour "Ne sait pas" (`frontend/src/lib/majorityJudgmentMentions.ts`,
+  nouveau fichier, même patron que `methodCopy.ts`).
+- Nouveau composant `MajorityJudgmentResults.tsx` : barre horizontale
+  empilée par mention, ligne de médiane (position fixe au centre, comme
+  la référence — repère visuel de comparaison entre options, pas une
+  position littérale du fractile), mention majoritaire et badge
+  "(≥X %)", classement par médiane puis départage. Branché dans
+  `Results.tsx` (page publique) et dans le nouveau
+  `MajorityJudgmentPanel.tsx` (équivalent de `TallyPanel.tsx`, sans
+  sélecteur de méthode puisqu'une seule s'applique ici).
+- Nouvelle page publique `CampaignInvite.tsx`
+  (`/campagnes/:id/questions/:id/inviter`) : QR code (nouvelle
+  dépendance `qrcode`, MIT, génération côté client sans service
+  externe), statistiques en direct, lien à copier — accessible depuis
+  `CampaignManage.tsx`.
+- `FormBuilder.tsx` : "Jugement majoritaire" ajouté à la bibliothèque
+  de questions (options requises, comme choix unique/classement).
+
+### Ce qui a été vérifié concrètement
+
+- **50 votant·e·s réel·le·s** (comptes créés via `POST /auth/register`,
+  bulletins soumis via l'API réelle) sur 3 campagnes couvrant des
+  scénarios différents : répartition diverse (3 options, toutes les
+  mentions représentées), neutralisation à grande échelle (une option
+  ne recevant QUE des "Ne sait pas" face à une option réellement
+  favorable), départage par pourcentage (deux options à médiane
+  identique mais répartition différente).
+- **Agent de contrôle indépendant** (demande explicite du porteur de
+  projet) : une réimplémentation de l'algorithme en JavaScript, écrite
+  séparément du code Rust à partir de la seule spécification (pas une
+  traduction ligne à ligne), comparée bulletin par bulletin au résultat
+  réellement renvoyé par l'API — correspondance exacte sur les 3
+  scénarios (médiane, pourcentages, classement complet, répartition par
+  mention). Complété par une revue de code indépendante (sous-agent
+  dédié, sans connaissance du script de vérification ci-dessus) du
+  module Rust lui-même : verdict "correct, aucun bug" sur les 5 points
+  vérifiés (neutralisation, calcul de médiane, direction du
+  comparateur de classement, sûreté de `total_cmp`, absence
+  d'avantage résiduel pour "Ne sait pas") — avec une observation
+  honnête à noter, pas un bug : la neutralisation s'applique mention
+  par mention, pas option par option, donc une option avec une
+  minorité d'avis réellement défavorables et une majorité de "Ne sait
+  pas" peut dépasser une option notée uniformément défavorable — c'est
+  la conséquence directe et voulue de la règle documentée, pas un
+  défaut.
+- Un 51e vote a ensuite été soumis EN DIRECT depuis un vrai navigateur
+  (Chromium/Playwright) sur l'une des 3 campagnes, puis le résultat
+  redépouillé et revérifié par le même agent de contrôle indépendant —
+  toujours exact.
+- **Non-régression complète** : le scénario de bout en bout de
+  l'itération 12 (30 comptes, 18 campagnes, les 6 types de question
+  préexistants) a été rejoué intégralement sur une base fraîche —
+  toujours 100% correct, y compris le vote en direct navigateur sur les
+  6 campagnes réservées à cet effet. Aucune régression détectée.
+- Parcours visuel complet (Chromium/Playwright, desktop et mobile,
+  aucune erreur console) : écran de saisie, confirmation de vote,
+  dépouillement admin, résultats publics pour les 3 scénarios, page
+  d'invitation avec QR code fonctionnel.
+- `make check` (fmt + clippy `-D warnings` + tous les tests Rust) :
+  vert. Tests d'intégration PostgreSQL réels (base dédiée) : 10/10
+  verts. `npx tsc -b`, `npx oxlint`, `npm run build` (frontend) :
+  verts.
+
+### Limites connues, non résolues par cette itération
+
+- Le classement matérialisé par le composant de résultats (React)
+  re-trie côté client par `counts`/`percentages` plutôt que de recevoir
+  un ordre explicite de l'API — cohérent avec le fait que `TallyOutcome`
+  n'expose déjà nulle part ailleurs un "ordre total", seulement des
+  `winners` (limité par `seats`) : pas une régression introduite ici,
+  un choix de modèle déjà en place pour les autres méthodes.
+- Les idées non retenues du projet externe (mode isoloir, minuteur
+  d'expiration, tri aléatoire, chat) restent des candidates futures,
+  cf. `docs/ROADMAP.md`.
+
+### Prochaines itérations candidates (mise à jour)
+
+1. Mode isoloir (masquer les résultats en temps réel aux votant·e·s
+   tant que le scrutin n'est pas clôturé) — idée reprise du projet
+   externe, non implémentée cette itération.
+2. Reste des listes des itérations précédentes, inchangées.

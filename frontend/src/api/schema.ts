@@ -825,6 +825,45 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/campaigns/{campaignId}/questions/{questionId}/ballot_count": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Compte BRUT de bulletins reçus pour une question, sans dépouillement (public) — ni un résultat calculé, ni des réponses individuelles, juste leur nombre. Utilisé par la page d'invitation publique pour une participation "en direct" avant tout dépouillement. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    campaignId: components["parameters"]["CampaignId"];
+                    questionId: components["parameters"]["QuestionId"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Nombre de bulletins */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["BallotCountResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -928,7 +967,7 @@ export interface components {
         CreateQuestionRequest: {
             prompt: string;
             /** @enum {string} */
-            type: "single_choice" | "multiple_choice" | "text" | "number" | "scale" | "ranking";
+            type: "single_choice" | "multiple_choice" | "text" | "number" | "scale" | "ranking" | "majority_judgment";
             /** @default false */
             required: boolean;
             options?: components["schemas"]["QuestionOption"][];
@@ -973,7 +1012,13 @@ export interface components {
             type: "ranking";
             options: components["schemas"]["QuestionOption"][];
         };
-        QuestionType: components["schemas"]["QuestionTypeSingleChoice"] | components["schemas"]["QuestionTypeMultipleChoice"] | components["schemas"]["QuestionTypeText"] | components["schemas"]["QuestionTypeNumber"] | components["schemas"]["QuestionTypeScale"] | components["schemas"]["QuestionTypeRanking"];
+        /** @description Jugement majoritaire (§6.2, §15.1) : chaque option reçoit une mention entière de 1 (Très défavorable) à 6 (Ne sait pas) — cf. CastBallotRequest.scores et voting.majority_judgment. */
+        QuestionTypeMajorityJudgment: {
+            /** @enum {string} */
+            type: "majority_judgment";
+            options: components["schemas"]["QuestionOption"][];
+        };
+        QuestionType: components["schemas"]["QuestionTypeSingleChoice"] | components["schemas"]["QuestionTypeMultipleChoice"] | components["schemas"]["QuestionTypeText"] | components["schemas"]["QuestionTypeNumber"] | components["schemas"]["QuestionTypeScale"] | components["schemas"]["QuestionTypeRanking"] | components["schemas"]["QuestionTypeMajorityJudgment"];
         Question: {
             /** Format: uuid */
             id: string;
@@ -1001,7 +1046,7 @@ export interface components {
             voter_id?: string | null;
             /** @description Choix unique/multiple (id de la ou des options) ou Classement (ids de toutes les options, dans l'ordre de préférence) */
             selections?: string[];
-            /** @description Réservé pour une future méthode voting.score, non câblée à un type de question aujourd'hui — cf. dto.rs */
+            /** @description Jugement majoritaire : une mention entière 1 (Très défavorable) à 6 (Ne sait pas) par option, requise pour CHAQUE option de la question — cf. voting.majority_judgment */
             scores?: {
                 [key: string]: number;
             } | null;
@@ -1024,6 +1069,9 @@ export interface components {
             /** @enum {string} */
             kind: "ranking";
             rankings: string[][];
+        };
+        BallotCountResponse: {
+            count: number;
         };
         NumericSummary: {
             count: number;

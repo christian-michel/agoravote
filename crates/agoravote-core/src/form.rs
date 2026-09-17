@@ -4,9 +4,10 @@
 //! Un `Form` est la structure de collecte d'une campagne (§5) ; il
 //! contient une ou plusieurs `Question`. Le périmètre MVP (§15) ne
 //! couvre que les types de question suivants : choix unique, choix
-//! multiple, texte, nombre, échelle, classement. Les autres familles
-//! listées en §6.2 (matrice, date...) seront ajoutées comme variantes
-//! supplémentaires de [`QuestionType`] sans changer le reste du modèle.
+//! multiple, texte, nombre, échelle, classement, jugement majoritaire.
+//! Les autres familles listées en §6.2 (matrice, date...) seront
+//! ajoutées comme variantes supplémentaires de [`QuestionType`] sans
+//! changer le reste du modèle.
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -44,6 +45,17 @@ pub enum QuestionType {
     /// Classement d'options par ordre de préférence (utilisé par les
     /// méthodes de vote préférentiel : Condorcet, STV — §8.2).
     Ranking { options: Vec<QuestionOption> },
+    /// Jugement majoritaire (§6.2, §15.1) : chaque participant
+    /// attribue une MENTION (échelle qualitative fixe, 1 à 6 : de
+    /// "Très défavorable" à "Très favorable", plus "Ne sait pas") à
+    /// CHAQUE option — pas une seule sélection comme `SingleChoice`,
+    /// ni une note libre comme pour `voting.score`. Type dédié plutôt
+    /// que réutiliser `SingleChoice`/`Number` : l'échelle de mentions
+    /// est fixe et partagée par toutes les options d'une même
+    /// question, ce qu'aucun des deux autres types ne peut exprimer.
+    /// Seule `voting.majority_judgment` sait dépouiller ce type (cf.
+    /// `agoravote-voting`).
+    MajorityJudgment { options: Vec<QuestionOption> },
 }
 
 /// Une option proposée pour une question à choix.

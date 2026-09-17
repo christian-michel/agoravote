@@ -460,6 +460,27 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  /campaigns/{campaignId}/questions/{questionId}/ballot_count:
+    get:
+      tags: [results]
+      summary: >
+        Compte BRUT de bulletins reçus pour une question, sans
+        dépouillement (public) — ni un résultat calculé, ni des
+        réponses individuelles, juste leur nombre. Utilisé par la page
+        d'invitation publique pour une participation "en direct" avant
+        tout dépouillement.
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/CampaignId"
+        - $ref: "#/components/parameters/QuestionId"
+      responses:
+        "200":
+          description: Nombre de bulletins
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BallotCountResponse"
+
 components:
   securitySchemes:
     bearerAuth:
@@ -645,7 +666,7 @@ components:
         prompt: { type: string }
         type:
           type: string
-          enum: [single_choice, multiple_choice, text, number, scale, ranking]
+          enum: [single_choice, multiple_choice, text, number, scale, ranking, majority_judgment]
         required: { type: boolean, default: false }
         options:
           type: array
@@ -713,6 +734,18 @@ components:
         options:
           type: array
           items: { $ref: "#/components/schemas/QuestionOption" }
+    QuestionTypeMajorityJudgment:
+      type: object
+      required: [type, options]
+      properties:
+        type: { type: string, enum: [majority_judgment] }
+        options:
+          type: array
+          items: { $ref: "#/components/schemas/QuestionOption" }
+      description: >
+        Jugement majoritaire (§6.2, §15.1) : chaque option reçoit une
+        mention entière de 1 (Très défavorable) à 6 (Ne sait pas) —
+        cf. CastBallotRequest.scores et voting.majority_judgment.
     QuestionType:
       oneOf:
         - $ref: "#/components/schemas/QuestionTypeSingleChoice"
@@ -721,6 +754,7 @@ components:
         - $ref: "#/components/schemas/QuestionTypeNumber"
         - $ref: "#/components/schemas/QuestionTypeScale"
         - $ref: "#/components/schemas/QuestionTypeRanking"
+        - $ref: "#/components/schemas/QuestionTypeMajorityJudgment"
 
     Question:
       type: object
@@ -762,7 +796,10 @@ components:
           type: object
           additionalProperties: { type: number }
           nullable: true
-          description: Réservé pour une future méthode voting.score, non câblée à un type de question aujourd'hui — cf. dto.rs
+          description: >
+            Jugement majoritaire : une mention entière 1 (Très défavorable)
+            à 6 (Ne sait pas) par option, requise pour CHAQUE option de la
+            question — cf. voting.majority_judgment
         numeric_value:
           type: number
           nullable: true
@@ -799,6 +836,12 @@ components:
               items: { type: array, items: { type: string } }
       discriminator:
         propertyName: kind
+
+    BallotCountResponse:
+      type: object
+      required: [count]
+      properties:
+        count: { type: integer }
 
     NumericSummary:
       type: object

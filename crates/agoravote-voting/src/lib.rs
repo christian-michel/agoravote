@@ -18,19 +18,23 @@
 //! - [`majority::MajoritySimple`] — majorité simple avec quorum optionnel.
 //! - [`approval::Approval`] — vote d'approbation (plusieurs choix possibles).
 //! - [`score::ScoreVoting`] — vote par score (note moyenne par option).
+//! - [`majority_judgment::MajorityJudgment`] — jugement majoritaire
+//!   (médiane des mentions par option, départagée par pourcentages).
 //!
-//! Les méthodes plus avancées (Condorcet/Schulze, STV, jugement
-//! majoritaire — cf. §15.1 "hors MVP mais prévues dans l'architecture")
-//! ne sont pas encore implémentées ; le module [`registry`] est conçu
-//! pour qu'il suffise d'y enregistrer un nouveau module quand elles
-//! le seront, sans toucher aux méthodes existantes.
+//! Les méthodes plus avancées (Condorcet/Schulze, STV — cf. §15.1
+//! "hors MVP mais prévues dans l'architecture") ne sont pas encore
+//! implémentées ; le module [`registry`] est conçu pour qu'il suffise
+//! d'y enregistrer un nouveau module quand elles le seront, sans
+//! toucher aux méthodes existantes.
 
 pub mod approval;
 pub mod majority;
+pub mod majority_judgment;
 pub mod registry;
 pub mod score;
 
 pub use approval::Approval;
 pub use majority::MajoritySimple;
+pub use majority_judgment::MajorityJudgment;
 pub use registry::VotingMethodRegistry;
 pub use score::ScoreVoting;

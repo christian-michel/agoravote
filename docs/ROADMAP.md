@@ -57,10 +57,12 @@ coché — l'historique de ce qui a été priorisé et quand a de la valeur.
       classement) avant construction.
 - [ ] Journal d'audit (`AuditEvent`, déjà défini dans
       `agoravote-core`) réellement émis par les handlers et persisté.
-- [ ] Méthode de vote avancée supplémentaire — candidate proposée :
-      jugement majoritaire (plus simple à tester que Condorcet/STV,
-      cf. cahier des charges §2.2 pour la référence Condorcet PHP
-      utilisable comme oracle de test).
+- [x] Méthode de vote avancée supplémentaire : jugement majoritaire.
+      Fait — cf. `docs/DEVLOG.md` itération 13 (`voting.majority_judgment`,
+      `QuestionType::MajorityJudgment`, idée reprise d'un projet externe
+      cité par le porteur de projet). Condorcet/STV restent hors MVP
+      (cf. cahier des charges §2.2 pour la référence Condorcet PHP
+      utilisable comme oracle de test le jour où ils seront implémentés).
 - [ ] Export CSV/JSON dédié des résultats (§14 du cahier des charges) —
       aujourd'hui seul le JSON brut de l'API est disponible.
 - [x] Câbler `agoravote-stats` (moyenne/médiane/écart-type) à une
@@ -71,9 +73,13 @@ coché — l'historique de ce qui a été priorisé et quand a de la valeur.
       (toujours sur donnée fictive pour cette partie).
 - [ ] Câbler `voting.score` (implémenté et testé dans
       `agoravote-voting`, cf. `docs/DEVLOG.md` itération 12) à un
-      chemin HTTP réel — aucun `QuestionType` actuel ne produit de
-      bulletin `scores`, nécessiterait un type "notation par option"
-      absent du modèle, décision produit avant travail technique.
+      chemin HTTP réel — un type "notation par option" existe
+      désormais (`QuestionType::MajorityJudgment`, itération 13), mais
+      ses bulletins vont vers `voting.majority_judgment`, pas
+      `voting.score` : nécessiterait soit un type dédié supplémentaire
+      (notation libre, pas des mentions fixes), soit un paramètre de
+      méthode configurable sur le même type — décision produit avant
+      travail technique.
 - [ ] Attributs démographiques optionnels sur la participation (âge,
       territoire...), si le projet veut les comparaisons par groupe de
       la planche 6 — décision produit sur la collecte de ces données
@@ -101,6 +107,9 @@ coché — l'historique de ce qui a été priorisé et quand a de la valeur.
       `Vote.tsx`, nouvelle distinction réponses brutes (`ResponsesView`/
       `ResponsesPanel`) vs résultat calculé (`TallyPanel`, choix
       unique/multiple uniquement).
+- [x] Vote et résultats pour le jugement majoritaire, page
+      d'invitation publique avec QR code. Fait — cf. `docs/DEVLOG.md`
+      itération 13.
 - [ ] Écran de permissions/audit une fois le backend correspondant fait.
 - [ ] Affichage multilingue de l'interface elle-même (le contenu des
       campagnes l'est déjà côté modèle — `prompt`/`labels` par langue
@@ -114,6 +123,20 @@ coché — l'historique de ce qui a été priorisé et quand a de la valeur.
       (âge/territoire) et séries temporelles de participation,
       volontairement non construites en itération 7 faute de données
       réelles (cf. les deux items ci-dessous, préalables backend).
+
+Idées repérées dans un projet externe cité par le porteur de projet
+(cf. `docs/DEVLOG.md` itération 13), retenues comme candidates mais
+pas encore implémentées :
+
+- [ ] Mode isoloir : masquer les résultats en temps réel aux
+      votant·e·s tant que le scrutin n'est pas clôturé (seul·e
+      l'organisateur/trice les voit) — évite l'effet de groupe.
+- [ ] Minuteur d'expiration avec barre de progression colorée sur la
+      page d'invitation (le champ `expire_time` n'existe pas encore
+      côté modèle `Campaign`).
+- [ ] Tri aléatoire (Fisher-Yates) des options à l'affichage du vote,
+      fixe pour la durée de la session — réduit les biais d'ordre.
+- [ ] Chat en direct sur la page d'invitation/de vote.
 
 ## Identité décentralisée (Ğ1v2)
 

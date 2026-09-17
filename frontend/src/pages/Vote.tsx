@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api, ApiError, type Campaign, type Question } from "../api/client";
 import { Alert, Button, Card } from "../components/ui";
+import { MAJORITY_JUDGMENT_MENTIONS } from "../lib/majorityJudgmentMentions";
 
 export default function Vote() {
   const { campaignId, questionId } = useParams<{ campaignId: string; questionId: string }>();
@@ -17,6 +18,9 @@ export default function Vote() {
   const [selected, setSelected] = useState<string[]>([]);
   const [textValue, setTextValue] = useState("");
   const [numericValue, setNumericValue] = useState<number | null>(null);
+  // Jugement majoritaire : une mention (1-6) par id d'option — cf.
+  // `agoravote_core::QuestionType::MajorityJudgment`.
+  const [mentions, setMentions] = useState<Record<string, number>>({});
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -79,6 +83,7 @@ export default function Vote() {
     const type = question.question_type.type;
     const body: {
       selections?: string[];
+      scores?: Record<string, number>;
       numeric_value?: number;
       text_value?: string;
     } = {};
@@ -91,6 +96,9 @@ export default function Vote() {
     } else if (type === "text") {
       if (textValue.trim().length === 0) return;
       body.text_value = textValue;
+    } else if (type === "majority_judgment") {
+      if (Object.keys(mentions).length === 0) return;
+      body.scores = mentions;
     }
 
     setSubmitting(true);
@@ -159,6 +167,10 @@ export default function Vote() {
     canSubmit = numericValue !== null;
   } else if (type === "text") {
     canSubmit = textValue.trim().length > 0;
+  } else if (type === "majority_judgment") {
+    canSubmit =
+      "options" in question.question_type &&
+      question.question_type.options.every((o) => mentions[o.id] !== undefined);
   }
 
   return (
@@ -314,6 +326,42 @@ export default function Vote() {
               onChange={(e) => setTextValue(e.target.value)}
               placeholder="Votre réponse"
             />
+          )}
+
+          {type === "majority_judgment" && "options" in question.question_type && (
+            <fieldset className="flex flex-col gap-4">
+              <legend className="text-xs text-muted">
+                Attribuez une mention à chaque proposition.
+              </legend>
+              {question.question_type.options.map((option) => (
+                <div key={option.id} className="flex flex-col gap-2">
+                  <span className="text-sm font-medium text-ink">{option.labels.fr}</span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {MAJORITY_JUDGMENT_MENTIONS.map((mention) => {
+                      const selected = mentions[option.id] === mention.value;
+                      return (
+                        <button
+                          key={mention.value}
+                          type="button"
+                          onClick={() =>
+                            setMentions((current) => ({ ...current, [option.id]: mention.value }))
+                          }
+                          className="rounded-md border-2 px-2.5 py-1.5 text-xs font-medium transition-transform"
+                          style={{
+                            borderColor: mention.color,
+                            backgroundColor: selected ? mention.color : "transparent",
+                            color: selected ? "#fff" : "var(--color-ink)",
+                            transform: selected ? "translateY(-1px)" : undefined,
+                          }}
+                        >
+                          {mention.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </fieldset>
           )}
 
           {error && (

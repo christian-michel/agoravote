@@ -179,4 +179,8 @@ export const api = {
    * pas de dépouillement par méthode de vote, toujours "en direct". */
   getResponses: (campaignId: string, questionId: string) =>
     request<QuestionResponses>(`/campaigns/${campaignId}/questions/${questionId}/responses`),
+
+  /** Compte brut de bulletins, sans dépouillement — page d'invitation. */
+  getBallotCount: (campaignId: string, questionId: string) =>
+    request<{ count: number }>(`/campaigns/${campaignId}/questions/${questionId}/ballot_count`),
 };

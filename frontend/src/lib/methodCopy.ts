@@ -18,4 +18,9 @@ export const METHOD_COPY: Record<string, { label: string; description: string }>
     label: "Vote par score",
     description: "Chaque participant attribue une note à une ou plusieurs options ; la moyenne décide.",
   },
+  "voting.majority_judgment": {
+    label: "Jugement majoritaire",
+    description:
+      "Chaque participant attribue une mention (de « Très défavorable » à « Très favorable ») à chaque option ; la médiane des mentions décide, départagée par les pourcentages au-dessus/en-dessous.",
+  },
 };

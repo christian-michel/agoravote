@@ -4,6 +4,7 @@ import { api, ApiError, type Question, type QuestionResponses, type ResultSet } 
 import { Alert, Card } from "../components/ui";
 import { BarList, Donut, ParticipationGauge } from "../components/charts";
 import { ResponsesView } from "../components/ResponsesView";
+import { MajorityJudgmentResults } from "../components/MajorityJudgmentResults";
 import { InfoIcon, ShareIcon } from "../components/icons";
 import { METHOD_COPY } from "../lib/methodCopy";
 
@@ -39,9 +40,11 @@ export default function Results() {
         }
         setQuestion(q);
 
-        const isChoice =
-          q.question_type.type === "single_choice" || q.question_type.type === "multiple_choice";
-        if (isChoice) {
+        const isComputed =
+          q.question_type.type === "single_choice" ||
+          q.question_type.type === "multiple_choice" ||
+          q.question_type.type === "majority_judgment";
+        if (isComputed) {
           try {
             setResult(await api.getResults(campaignId, questionId));
           } catch (err) {
@@ -132,41 +135,53 @@ export default function Results() {
         </button>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <Card>
+        <ParticipationGauge
+          percent={expressedRate}
+          label="Suffrages exprimés"
+          sublabel={`${result.outcome.valid_ballots} sur ${result.outcome.total_ballots} bulletin(s) reçu(s)`}
+        />
+      </Card>
+
+      {question.question_type.type === "majority_judgment" ? (
         <Card>
-          <ParticipationGauge
-            percent={expressedRate}
-            label="Suffrages exprimés"
-            sublabel={`${result.outcome.valid_ballots} sur ${result.outcome.total_ballots} bulletin(s) reçu(s)`}
-          />
+          <h2 className="font-medium text-ink">Résultats par option</h2>
+          <div className="mt-4">
+            <MajorityJudgmentResults result={result} optionLabel={label} />
+          </div>
         </Card>
+      ) : (
         <Card>
           <Donut
             slices={sorted.map(([option, pct]) => ({ key: option, label: label(option), value: pct }))}
           />
         </Card>
-      </div>
+      )}
 
-      <Card>
-        <h2 className="font-medium text-ink">Résultats par option</h2>
-        <div className="mt-4">
-          <BarList
-            items={sorted.map(([option, pct]) => ({
-              key: option,
-              label: label(option),
-              value: pct,
-              highlighted: result.outcome.winners.includes(option),
-            }))}
-          />
-        </div>
+      {question.question_type.type !== "majority_judgment" && (
+        <Card>
+          <h2 className="font-medium text-ink">Résultats par option</h2>
+          <div className="mt-4">
+            <BarList
+              items={sorted.map(([option, pct]) => ({
+                key: option,
+                label: label(option),
+                value: pct,
+                highlighted: result.outcome.winners.includes(option),
+              }))}
+            />
+          </div>
 
-        <div className="mt-5 flex flex-wrap gap-x-6 gap-y-1 border-t border-line pt-4 text-xs text-muted">
-          <span>Méthode {method?.label ?? result.voting_method_id} v{result.voting_method_version}</span>
-          {result.outcome.quorum_met !== null && result.outcome.quorum_met !== undefined && (
-            <span>Quorum {result.outcome.quorum_met ? "atteint" : "non atteint"}</span>
-          )}
-        </div>
-      </Card>
+          <div className="mt-5 flex flex-wrap gap-x-6 gap-y-1 border-t border-line pt-4 text-xs text-muted">
+            <span>
+              Méthode {method?.label ?? result.voting_method_id} v{result.voting_method_version}
+            </span>
+            {result.outcome.quorum_met !== null && result.outcome.quorum_met !== undefined && (
+              <span>Quorum {result.outcome.quorum_met ? "atteint" : "non atteint"}</span>
+            )}
+          </div>
+        </Card>
+      )}
 
       {method && (
         <Card>

@@ -55,17 +55,12 @@ pub struct CastBallotRequest {
     /// l'ordre de préférence).
     #[serde(default)]
     pub selections: Vec<String>,
-    /// Réservé pour `voting.score` (§8.2, déjà implémenté dans
-    /// `agoravote-voting` et testé, cf. son crate), jamais encore
-    /// câblé à un `QuestionType` : aucune question ne produit
-    /// aujourd'hui de bulletin avec ce champ rempli (cf.
-    /// `routes.rs::build_ballot`) — même statut que
-    /// `agoravote_store::Store::get_form`, gardé prêt plutôt que
-    /// supprimé. `#[allow(dead_code)]` : jamais lu par du code Rust
-    /// aujourd'hui, mais bien désérialisé (`Deserialize`) si un client
-    /// le fournit malgré tout — pas du code mort au sens propre.
+    /// `MajorityJudgment` (une mention 1-6 par option) — lu par
+    /// `build_ballot`. `voting.score` (§8.2) partage ce même champ de
+    /// bulletin mais n'est câblé à aucun `QuestionType` aujourd'hui
+    /// (aucune question ne produit de bulletin `scores` pour cette
+    /// méthode-là spécifiquement).
     #[serde(default)]
-    #[allow(dead_code)]
     pub scores: Option<HashMap<String, f64>>,
     /// `Number`/`Scale`.
     #[serde(default)]
@@ -115,6 +110,14 @@ pub struct NumericSummary {
     pub std_dev: Option<f64>,
     pub min: Option<f64>,
     pub max: Option<f64>,
+}
+
+/// Réponse à `GET /campaigns/:id/questions/:qid/ballot_count` — cf.
+/// `routes.rs::get_ballot_count` pour la distinction avec un résultat
+/// calculé.
+#[derive(Debug, Serialize)]
+pub struct BallotCountResponse {
+    pub count: u64,
 }
 
 /// Corps de requête : lancement d'un dépouillement (écran "06/11",

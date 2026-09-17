@@ -183,7 +183,8 @@ vote inconnue refusée — voir `docs/DEVLOG.md` pour le détail complet.
   `Ballot`, `ResultSet`, `AuditEvent` (défini mais pas encore branché
   sur l'API).
 - **Contrat de module et méthodes de vote** (§6, §7, §8.2) :
-  `voting.majority`, `voting.approval`, `voting.score`, chacune testée
+  `voting.majority`, `voting.approval`, `voting.score`,
+  `voting.majority_judgment` (jugement majoritaire), chacune testée
   unitairement contre des jeux de bulletins connus.
 - **Moteur statistique** (§8.3, §8.4) : moyenne, médiane, mode,
   variance/écart-type, quartiles, table de fréquence, tableau croisé.

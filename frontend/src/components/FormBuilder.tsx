@@ -3,7 +3,14 @@ import { api, ApiError, type CreateQuestionRequest } from "../api/client";
 import { Alert, Button, Card, Field } from "./ui";
 import { TrashIcon } from "./icons";
 
-type QuestionKind = "single_choice" | "multiple_choice" | "text" | "number" | "scale" | "ranking";
+type QuestionKind =
+  | "single_choice"
+  | "multiple_choice"
+  | "text"
+  | "number"
+  | "scale"
+  | "ranking"
+  | "majority_judgment";
 
 interface DraftOption {
   id: string;
@@ -29,6 +36,7 @@ const QUESTION_LIBRARY: { type: QuestionKind; label: string; needsOptions: boole
   { type: "single_choice", label: "Choix unique", needsOptions: true },
   { type: "multiple_choice", label: "Choix multiple", needsOptions: true },
   { type: "ranking", label: "Classement", needsOptions: true },
+  { type: "majority_judgment", label: "Jugement majoritaire", needsOptions: true },
   { type: "text", label: "Texte libre", needsOptions: false },
   { type: "number", label: "Nombre", needsOptions: false },
   { type: "scale", label: "Échelle", needsOptions: false },
@@ -158,6 +166,8 @@ export function FormBuilder({
           };
         case "ranking":
           return { ...base, type: "ranking", options };
+        case "majority_judgment":
+          return { ...base, type: "majority_judgment", options };
         case "text":
           return { ...base, type: "text", max_length: q.maxLength ? Number(q.maxLength) : undefined };
         case "number":

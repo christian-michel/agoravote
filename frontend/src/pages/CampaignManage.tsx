@@ -5,6 +5,7 @@ import { Alert, Button, Card, StatusBadge } from "../components/ui";
 import { FormBuilder } from "../components/FormBuilder";
 import { TallyPanel } from "../components/TallyPanel";
 import { ResponsesPanel } from "../components/ResponsesPanel";
+import { MajorityJudgmentPanel } from "../components/MajorityJudgmentPanel";
 import { rememberCampaign } from "../lib/recentCampaigns";
 
 export default function CampaignManage() {
@@ -137,12 +138,20 @@ export default function CampaignManage() {
           {form.questions.map((question) => (
             <div key={question.id} className="flex flex-col gap-2">
               {campaign.status === "Published" && (
-                <Link
-                  to={`/campagnes/${campaignId}/questions/${question.id}/voter`}
-                  className="self-start text-sm text-accent hover:underline"
-                >
-                  Ouvrir l'écran de vote citoyen →
-                </Link>
+                <div className="flex flex-wrap gap-4">
+                  <Link
+                    to={`/campagnes/${campaignId}/questions/${question.id}/voter`}
+                    className="self-start text-sm text-accent hover:underline"
+                  >
+                    Ouvrir l'écran de vote citoyen →
+                  </Link>
+                  <Link
+                    to={`/campagnes/${campaignId}/questions/${question.id}/inviter`}
+                    className="self-start text-sm text-accent hover:underline"
+                  >
+                    Page d'invitation (QR code) →
+                  </Link>
+                </div>
               )}
               {question.question_type.type === "single_choice" ||
               question.question_type.type === "multiple_choice" ? (
@@ -150,6 +159,12 @@ export default function CampaignManage() {
                   campaignId={campaignId}
                   question={question}
                   modules={modules}
+                  canTally={campaign.status === "Published" || campaign.status === "Closed"}
+                />
+              ) : question.question_type.type === "majority_judgment" ? (
+                <MajorityJudgmentPanel
+                  campaignId={campaignId}
+                  question={question}
                   canTally={campaign.status === "Published" || campaign.status === "Closed"}
                 />
               ) : (
