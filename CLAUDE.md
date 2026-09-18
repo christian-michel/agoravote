@@ -53,7 +53,7 @@ réel).
 make check              # fmt --check + clippy -D warnings + tous les tests Rust — à lancer avant TOUT commit
 cargo test -p agoravote-store -- --ignored   # tests PostgreSQL réels (nécessite DATABASE_URL)
 cd frontend && npx tsc -b && npx oxlint && npm run build   # vérif frontend
-docker compose up -d    # API + PostgreSQL + frontend — http://localhost:8080
+docker compose up -d    # API + PostgreSQL + frontend — http://localhost:4080
 ```
 
 ## Conventions non négociables de ce projet

@@ -9,8 +9,11 @@
 # `agoravote-store`, mode "auto-hébergement / exécution locale" du
 # §1.1) — mais ce fichier active PostgreSQL par défaut, car c'est le
 # mode qu'on veut pour un usage réel. Une fois les trois services
-# démarrés, ouvrez http://localhost:8080 dans un navigateur (ou le
-# port choisi via AGORAVOTE_FRONTEND_PORT, cf. .env.example).
+# démarrés, ouvrez http://localhost:4080 dans un navigateur (ou le
+# port choisi via AGORAVOTE_FRONTEND_PORT, cf. .env.example). Les
+# défauts 4000/4080 (plutôt que 3000/8080) évitent une collision
+# fréquente avec Docker Desktop lui-même, qui réserve couramment ces
+# deux ports pour son propre usage interne sur macOS/Linux.
 
 services:
   db:
@@ -49,11 +52,11 @@ services:
         condition: service_healthy
     ports:
       # host:conteneur — le port hôte (à gauche) est configurable via
-      # AGORAVOTE_API_PORT (fichier .env, cf. .env.example) si 3000 est
+      # AGORAVOTE_API_PORT (fichier .env, cf. .env.example) si 4000 est
       # déjà utilisé sur votre machine ; le port conteneur (à droite)
       # ne doit jamais changer, c'est celui sur lequel le binaire
       # `agoravote-api` écoute réellement (cf. Dockerfile, `EXPOSE 3000`).
-      - "${AGORAVOTE_API_PORT:-3000}:3000"
+      - "${AGORAVOTE_API_PORT:-4000}:3000"
     environment:
       # Cf. docs/LOGGING.md pour la syntaxe complète de RUST_LOG.
       RUST_LOG: ${RUST_LOG:-info,agoravote_api=info,agoravote_core=info,agoravote_voting=info,agoravote_stats=info,agoravote_store=info}
@@ -84,10 +87,10 @@ services:
     ports:
       # host:conteneur — c'est ici que vous ouvrez l'application dans
       # un navigateur. Port hôte configurable via AGORAVOTE_FRONTEND_PORT
-      # (fichier .env, cf. .env.example) si 8080 est déjà pris ; le
+      # (fichier .env, cf. .env.example) si 4080 est déjà pris ; le
       # port conteneur (à droite) reste 80, celui sur lequel Nginx
       # écoute à l'intérieur (cf. frontend/Dockerfile).
-      - "${AGORAVOTE_FRONTEND_PORT:-8080}:80"
+      - "${AGORAVOTE_FRONTEND_PORT:-4080}:80"
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--spider", "http://localhost/"]

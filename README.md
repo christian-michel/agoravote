@@ -32,7 +32,7 @@ desktop et mobile, zéro erreur console) :
 
 ```bash
 docker compose up -d
-# puis ouvrir http://localhost:8080
+# puis ouvrir http://localhost:4080
 ```
 
 ## Pourquoi ce découpage en crates ?

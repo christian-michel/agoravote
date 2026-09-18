@@ -1656,3 +1656,95 @@ Frontend :
    au-delà de deux (aucun changement de code attendu ailleurs qu'un
    nouveau fichier `translations/<code>.ts`).
 3. Reste des listes des itérations précédentes, inchangées.
+
+## Itération 15 — nouveaux ports hôte Docker par défaut (3000/8080 → 4000/4080)
+
+Objectif : le porteur de projet a signalé un nouvel échec de
+`./install.sh` sur sa machine (Mac Mini, Docker Desktop), cette fois à
+la toute dernière étape (`docker compose up`) : `Bind for
+0.0.0.0:8080 failed: port is already allocated`. Contrairement au
+conflit de l'itération 11 (un autre service local occupait
+3000/8080), la sortie de `sudo ss -tulnp` fournie montre que le
+coupable est ici **Docker Desktop lui-même** — son processus
+`com.docker.back` écoute déjà sur 3000 ET 8080 (ainsi que 8090, 8091,
+5002, 5678, 5433, 34289) pour son propre usage interne. Le mécanisme
+de personnalisation posé en itération 11 (`AGORAVOTE_API_PORT`/
+`AGORAVOTE_FRONTEND_PORT` via `.env`) fonctionnait déjà et n'a pas
+été touché — mais des valeurs par défaut qui collisionnent avec
+Docker Desktop lui-même, sur une plateforme (macOS/Linux avec Docker
+Desktop) probablement fréquente parmi les futurs utilisateurs de ce
+projet, sont un mauvais choix de défaut, pas seulement "de malchance"
+pour un utilisateur en particulier.
+
+### Correctif
+
+Valeurs par défaut changées, partout où `docker-compose.yml` et
+`install.sh` les codaient : `AGORAVOTE_API_PORT` 3000 → 4000,
+`AGORAVOTE_FRONTEND_PORT` 8080 → 4080. Choisies en vérifiant qu'aucune
+des deux ne figure dans la liste complète des ports fournie par le
+porteur de projet (`ss -tulnp` : 3000, 8080, 8090, 8091, 5002, 5678,
+5433, 34289, 6341, 32700, 3306, 631, 33060, 139, 25, 445, 80, 1716,
+35587, et les entrées UDP/IPv6) — et déjà utilisées comme exemple dans
+`docs/DOCKER.md` avant cette itération, donc déjà un choix
+implicitement vérifié pour ne pas entrer en collision avec les ports
+*conteneur* du projet lui-même (3000/80, qui eux ne changent jamais).
+
+Seuls les ports **hôte Docker** ont changé — strictement ce que le
+porteur de projet a demandé ("modifier le docker de sorte qu'il en
+utilise d'autres") :
+- `docker-compose.yml` (défauts `${AGORAVOTE_API_PORT:-4000}`/
+  `${AGORAVOTE_FRONTEND_PORT:-4080}`, commentaires mis à jour).
+- `.env.example` (mêmes nouvelles valeurs, commentaire expliquant la
+  raison : collision fréquente avec Docker Desktop).
+- `install.sh` (mêmes valeurs de repli pour l'affichage final des
+  URLs).
+- `docs/DOCKER.md` : tous les exemples `curl`/navigateur mis à jour ;
+  la section "Changer le port" reformulée puisque 4000/4080
+  deviennent le défaut (l'exemple de personnalisation utilise
+  désormais 5000/5080, pour ne pas laisser un exemple identique au
+  défaut) ; ligne du tableau de dépannage mise à jour.
+- `CLAUDE.md` (commande `docker compose up -d` de la section
+  "Commandes essentielles") et `README.md` (section démarrage rapide
+  Docker uniquement).
+
+Explicitement **non touché**, car hors de la portée de la demande
+(ports *conteneur*, pas ports *hôte*, ou workflow local sans Docker) :
+`Dockerfile` (`EXPOSE 3000`), `frontend/nginx.conf` (`listen 80`),
+`crates/agoravote-api/src/main.rs` (adresse d'écoute réelle du
+binaire, partagée par le mode Docker ET le mode `cargo run` local —
+c'est précisément parce que ce port ne bouge jamais que le mécanisme
+de port hôte personnalisable fonctionne), les sections `README.md`
+décrivant `cargo run -p agoravote-api` en local (toujours port 3000,
+sans rapport avec Docker), `docs/SECURITY.md` (port 3000 mentionné
+génériquement pour le conseil de reverse proxy TLS), et l'URL
+d'exemple `http://localhost:3000` dans `docs/openapi.yaml` (référence
+illustrative du contrat d'API, pas une adresse que quiconque ouvre
+réellement pour ce déploiement).
+
+### Ce qui a été vérifié concrètement — et ce qui ne l'a pas été
+
+Vérification faite : relecture croisée de tous les fichiers changés
+pour confirmer la cohérence des nouvelles valeurs entre eux (mêmes
+deux nombres partout où un défaut hôte apparaît), et recherche
+exhaustive (`grep -rn "3000\|8080"`) dans tout le dépôt pour s'assurer
+qu'aucune occurrence pertinente au port hôte Docker n'a été oubliée.
+
+**Non vérifié : un `docker compose up` réel avec ces nouveaux
+défauts.** Comme lors des itérations précédentes touchant à Docker
+dans cet environnement (cf. itération 6, itération 10), l'accès
+réseau aux couches d'images Docker Hub reste bloqué par la politique
+réseau de ce bac à sable — `docker compose build`/`up` n'a pas pu être
+rejoué ici. C'est un changement de configuration pur (aucune ligne de
+code Rust ni TypeScript modifiée), donc `make check` et la chaîne de
+vérification frontend (`tsc`/`oxlint`/`build`) ne sont pas affectés
+par construction et n'ont rien à révéler sur ce point précis — mais la
+seule vérification qui compte réellement ici (que `docker compose up`
+réussisse enfin sur la machine du porteur de projet) reste à faire par
+lui.
+
+### Prochaines itérations candidates (mise à jour)
+
+1. Confirmer avec le porteur de projet que `./install.sh`/
+   `docker compose up -d` aboutit désormais jusqu'au bout sur sa
+   machine avec les nouveaux défauts 4000/4080.
+2. Reste des listes des itérations précédentes, inchangées.

@@ -80,8 +80,8 @@ if [ -f .env ]; then
     source .env
     set +a
 fi
-API_PORT="${AGORAVOTE_API_PORT:-3000}"
-FRONTEND_PORT="${AGORAVOTE_FRONTEND_PORT:-8080}"
+API_PORT="${AGORAVOTE_API_PORT:-4000}"
+FRONTEND_PORT="${AGORAVOTE_FRONTEND_PORT:-4080}"
 
 # --- 1. Docker Engine ------------------------------------------------------
 if command -v docker &>/dev/null; then

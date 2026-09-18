@@ -16,7 +16,7 @@ Ce script (cf. son en-tête pour le détail complet) :
    Docker (pas le paquet `docker.io` d'Ubuntu, souvent en retard) ;
 2. construit l'image AgoraVote (`docker compose build`) ;
 3. démarre le conteneur (`docker compose up -d`) ;
-4. **attend activement** que `http://localhost:3000/health` réponde
+4. **attend activement** que `http://localhost:4000/health` réponde
    avant de vous rendre la main — il ne vous dit jamais "c'est prêt"
    par supposition.
 
@@ -30,30 +30,33 @@ vous-même avant de relancer `install.sh` :
 ## Vérifier que tout fonctionne
 
 ```bash
-curl http://localhost:3000/health
+curl http://localhost:4000/health
 # → ok
 
-curl http://localhost:3000/modules
+curl http://localhost:4000/modules
 # → catalogue des méthodes de vote installées (voting.majority, ...)
 ```
 
 Puis suivez le parcours de démonstration complet du `README.md`
 (créer une campagne, voter, dépouiller) en remplaçant simplement
-`BASE=http://localhost:3000` — c'est le même serveur, qu'il tourne via
-Docker ou via `cargo run`.
+`BASE=http://localhost:4000` — c'est le même serveur que celui lancé
+via `cargo run` (qui, lui, écoute par défaut sur le port 3000, cf.
+section "Changer le port" ci-dessous pour la distinction entre port
+hôte Docker et port du binaire).
 
-Ouvrez ensuite **http://localhost:8080** dans un navigateur pour
+Ouvrez ensuite **http://localhost:4080** dans un navigateur pour
 l'interface web (cf. section "Frontend" ci-dessous).
 
 ## Frontend
 
 Le service `frontend` (Nginx servant le build React, cf.
-`frontend/Dockerfile`) écoute sur le port `8080` et proxifie
-automatiquement `/api/*` vers le service `api` — aucune configuration
-CORS à gérer, aucune adresse d'API à saisir dans le navigateur.
+`frontend/Dockerfile`) est exposé par défaut sur le port hôte `4080`
+(cf. `AGORAVOTE_FRONTEND_PORT`) et proxifie automatiquement `/api/*`
+vers le service `api` — aucune configuration CORS à gérer, aucune
+adresse d'API à saisir dans le navigateur.
 
 ```bash
-curl -I http://localhost:8080/
+curl -I http://localhost:4080/
 # → 200 OK
 ```
 
@@ -76,7 +79,7 @@ fichier).
 
 ```bash
 docker compose restart   # ou down puis up -d
-curl http://localhost:3000/campaigns/<id>   # la campagne est toujours là
+curl http://localhost:4000/campaigns/<id>   # la campagne est toujours là
 ```
 
 Ce comportement a été vérifié pendant le développement : campagne +
@@ -153,9 +156,16 @@ utile que si vous n'avez plus aucun usage de Docker par ailleurs.
 
 ## Changer le port
 
-Par défaut, l'API est exposée sur `localhost:3000` et le frontend sur
-`localhost:8080`. Si l'un de ces ports est déjà pris sur votre machine
-(`port is already allocated`), pas besoin de modifier
+Par défaut, l'API Docker est exposée sur `localhost:4000` et le
+frontend sur `localhost:4080` — volontairement différents des ports
+3000/8080 qu'on voit le plus souvent dans ce genre de projet, car
+Docker Desktop (macOS/Linux) réserve couramment ces deux ports pour
+son propre usage interne, ce qui provoquait `port is already
+allocated` dès le premier démarrage sur certaines machines même sans
+aucun autre service en conflit.
+
+Si `4000` et/ou `4080` sont malgré tout déjà pris sur votre machine
+(un autre projet Docker, par exemple), pas besoin de modifier
 `docker-compose.yml` : créez un fichier `.env` à la racine du dépôt
 (copie de `.env.example`, jamais committé) et fixez-y le port hôte de
 votre choix, par exemple :
@@ -166,13 +176,13 @@ cp .env.example .env
 
 ```ini
 # .env
-AGORAVOTE_API_PORT=4000
-AGORAVOTE_FRONTEND_PORT=4080
+AGORAVOTE_API_PORT=5000
+AGORAVOTE_FRONTEND_PORT=5080
 ```
 
 Puis relancez `docker compose up -d` (ou `./install.sh`) : l'API sera
-accessible sur `http://localhost:4000` et le frontend sur
-`http://localhost:4080`. Les ports *conteneur* (3000 pour l'API, 80
+accessible sur `http://localhost:5000` et le frontend sur
+`http://localhost:5080`. Les ports *conteneur* (3000 pour l'API, 80
 pour le frontend) ne changent jamais, eux — seul le port hôte, celui
 que vous ouvrez dans un navigateur, est personnalisable.
 
@@ -182,7 +192,7 @@ que vous ouvrez dans un navigateur, est personnalisable.
 |---|---|---|
 | `install.sh` échoue à "Le service Docker répond" | Le service Docker n'est pas démarré | `sudo systemctl start docker`, relancer `install.sh` |
 | `permission denied` sur `docker` sans `sudo` | Votre utilisateur ne fait pas encore partie du groupe `docker` | Déconnectez-vous/reconnectez-vous après l'installation, ou `newgrp docker` |
-| `port is already allocated` | Un autre programme (ou un autre projet Docker) utilise déjà le port 3000 et/ou 8080 sur votre machine | Fixez `AGORAVOTE_API_PORT`/`AGORAVOTE_FRONTEND_PORT` dans un fichier `.env` (voir "Changer le port" ci-dessus) — vérifiez aussi `docker ps -a` : un ancien conteneur (d'AgoraVote ou d'un autre projet) peut retenir le port même arrêté |
+| `port is already allocated` | Un autre programme (ou un autre projet Docker, ou Docker Desktop lui-même) utilise déjà le port 4000 et/ou 4080 sur votre machine | Fixez `AGORAVOTE_API_PORT`/`AGORAVOTE_FRONTEND_PORT` dans un fichier `.env` (voir "Changer le port" ci-dessus) — vérifiez aussi `docker ps -a` : un ancien conteneur (d'AgoraVote ou d'un autre projet) peut retenir le port même arrêté |
 | Le conteneur redémarre en boucle | Voir les logs pour l'erreur exacte | `docker compose logs api` |
 | `curl: (7) Failed to connect` juste après le démarrage | Le serveur met parfois 1-2s à démarrer | `install.sh` gère déjà cette attente ; en usage manuel, patientez puis réessayez |
 | `api` reste "unhealthy" / redémarre en boucle, `db` semble démarré | `api` a démarré avant que `db` accepte des connexions | Normalement empêché par `depends_on: condition: service_healthy` ; vérifier `docker compose logs db` |
