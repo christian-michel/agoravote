@@ -141,7 +141,10 @@ prouve pas (appartenance à la toile de confiance).
    pallet `Membership` ou équivalent) contre un nœud `gdev` réel —
    **jamais `g1` en premier** — depuis un environnement qui a accès
    réseau à l'infrastructure Duniter (aucun de ceux utilisés jusqu'ici
-   ne l'a). Bloquant pour la suite.
+   ne l'a). Bloquant pour la suite de `chain.rs` spécifiquement — **plus
+   bloquant pour obtenir une vérification d'adhésion à la toile de
+   confiance en général**, cf. §7 ci-dessous (`sso-connect` offre une
+   voie alternative qui ne dépend pas de cette confirmation).
 3. ~~Ajouter un test de signature avec un vecteur cryptographique
    connu~~ — fait (itération 6, corrigé sr25519 -> ed25519 en
    itération 9, cf. ci-dessus).
@@ -161,6 +164,11 @@ prouve pas (appartenance à la toile de confiance).
    toute décision de légitimité de vote basée sur ce résultat).
 7. Intégration d'une extension de portefeuille Ğ1 côté frontend, pour
    remplacer le copier-coller manuel actuel de `/connexion-g1`.
+8. ~~Client OAuth2 `sso.rs` pour `sso-connect`~~ — fait (itération 16,
+   cf. §7 ci-dessous). Reste : câblage HTTP dans `agoravote-api`
+   (routes, persistance, cookie `state`), qui dépend d'un domaine
+   public pour AgoraVote (nécessaire à l'inscription manuelle auprès de
+   l'opérateur de l'instance visée) — cf. §7.
 
 ## 6. Références
 
@@ -171,3 +179,99 @@ prouve pas (appartenance à la toile de confiance).
 - Dépôt du runtime — <https://git.duniter.org/nodes/rust/duniter-v2s>
 - `subxt` (client Rust Substrate, maintenu en fork par Duniter) —
   <https://github.com/duniter/subxt>
+- `sso-connect` (protocole OAuth2 pour une connexion Ğ1 via
+  portefeuille, cf. §7) — <https://git.duniter.org/clients/sso-connect>,
+  déploiement de référence <https://connect.monnaie-libre.fr>
+
+## 7. `sso-connect` — troisième voie de connexion Ğ1, itération 16
+
+Le porteur de projet a signalé l'existence de `sso-connect`
+(<https://git.duniter.org/clients/sso-connect>), un serveur OAuth2 tiers
+qui authentifie un utilisateur via son portefeuille Ğ1 (Gecko ≥ 1.6.0,
+lien profond `g1://sso-login` ou QR code) **et** vérifie lui-même son
+adhésion à la toile de confiance avant de renvoyer un document
+d'identité — contournant ainsi, pour cette garantie précise, le
+blocage réseau qui empêche `chain.rs` d'être vérifié depuis cet
+environnement (§1, §5 point 2).
+
+### Ce qui distingue cette voie du protocole défi/signature existant
+
+| | `/auth/g1/challenge`+`/verify` (existant) | `sso-connect` (nouveau) |
+|---|---|---|
+| Prouve | Possession de clé uniquement | Possession de clé **+** adhésion actuelle à la toile de confiance |
+| Dépendance réseau de notre serveur | Aucune (vérification ed25519 locale) | Deux appels HTTPS vers l'instance `sso-connect` |
+| Notre code lit la chaîne Ğ1 | Non | Non — délégué à l'opérateur de l'instance `sso-connect` |
+| Portefeuille requis | N'importe lequel (copier-coller manuel) | Gecko ≥ 1.6.0 ou tout portefeuille listant l'hôte `sso-connect` visé |
+
+Les deux mécanismes sont **complémentaires, pas redondants** : le
+premier ne dépend d'aucun tiers mais ne prouve jamais l'adhésion à la
+toile de confiance (limite documentée depuis l'itération 8) ; le second
+obtient cette preuve, au prix d'une dépendance à la disponibilité et à
+l'honnêteté de l'opérateur de l'instance `sso-connect` choisie (cf.
+`docs/SECURITY.md`, à mettre à jour lors du câblage HTTP — le nœud
+Duniter et l'indexeur ne sont plus interrogés par nous, mais la
+confiance qu'on leur accordait se reporte sur l'opérateur de
+`sso-connect`).
+
+### Ce qui a été fait (itération 16) : le client OAuth2, pas le câblage
+
+`crates/agoravote-g1/src/sso.rs` (feature `sso-connect`, désactivée par
+défaut) implémente le protocole documenté par `SITE-INTEGRATION.md` du
+dépôt (fourni par le porteur de projet, pas deviné) :
+
+- `SsoConfig::authorize_url` — construit l'URL de redirection vers
+  `/oauth/authorize` (étape 1).
+- `exchange_code` — `POST /oauth/token` (Basic auth, `grant_type=
+  authorization_code`), renvoie un jeton d'accès opaque.
+- `fetch_identity` — `GET /oauth/userinfo` (Bearer), renvoie
+  `G1Identity { id, username, name, address, member, groups }`.
+- `complete_login` — enchaîne les deux appels ci-dessus, cas d'usage
+  normal pour l'appelant.
+
+**Ce module ne génère ni ne vérifie le paramètre `state`** (protection
+anti-CSRF requise par le protocole, cf. `SITE-INTEGRATION.md` §3 :
+« with no PKCE, this is your defence against a forged callback ») :
+cette responsabilité appartient à l'appelant HTTP (`agoravote-api`),
+pas à ce crate qui ne fait aucune I/O HTTP entrante ni gestion de
+session — cohérent avec la séparation des couches du projet.
+
+**Statut de vérification** : 8 tests contre un vrai serveur HTTP local
+(`wiremock`, port éphémère) reproduisant exactement les réponses
+documentées — y compris un test qui vérifie l'en-tête `Authorization:
+Basic ...` réellement envoyé, pas seulement le contenu du corps de
+requête. **Jamais vérifié contre `connect.monnaie-libre.fr` ni aucun
+déploiement réel** : cet environnement n'a toujours pas d'accès réseau
+à ce domaine (même blocage que pour `chain.rs`, cf. §1).
+
+### Ce qui reste à faire avant un câblage HTTP dans `agoravote-api`
+
+1. **Un domaine public HTTPS pour AgoraVote.** L'inscription auprès de
+   l'opérateur d'une instance (manuelle, cf. `SITE-INTEGRATION.md` §1)
+   exige une URL de callback exacte, comparée octet à octet — rien à
+   enregistrer tant qu'AgoraVote ne tourne qu'en local.
+2. **L'inscription elle-même** : contacter l'opérateur (pour
+   `connect.monnaie-libre.fr`, via `forum.monnaie-libre.fr`) avec l'URL
+   de callback, un `client_id` souhaité, l'URL publique du site — reçoit
+   en retour un `client_secret` (≥ 32 caractères) à stocker côté
+   serveur uniquement (jamais dans le code, jamais côté client).
+3. **Nouvelles routes `agoravote-api`** : une route de départ
+   (redirection vers `authorize_url`, avec génération d'un `state`
+   aléatoire posé en cookie `HttpOnly`/`Secure` à courte durée de vie —
+   double-soumission cookie, sans avoir besoin d'état côté serveur,
+   même philosophie que `Challenge::verify_freshness`) et une route de
+   callback (vérifie `state` contre le cookie **avant toute chose**,
+   appelle `complete_login`, retrouve ou provisionne le compte).
+4. **Persistance** : l'identité renvoyée par `sso-connect` se clé sur
+   `id` (`idty:<index>`), jamais sur `address` (cf.
+   `SITE-INTEGRATION.md` : stable même après rotation de clé du
+   portefeuille) — un nouveau lien, distinct de `G1Link`
+   (clé sur `public_key_hex`, protocole défi/signature), donc une
+   nouvelle table/migration plutôt qu'une réutilisation forcée d'un
+   modèle qui répond à une question différente.
+5. **Frontend** : un second bouton "Se connecter avec Ğ1 (SSO)" à côté
+   du parcours `/connexion-g1` existant, avec la même honnêteté déjà
+   appliquée à ce dernier sur ce que chaque mécanisme prouve
+   réellement.
+6. **Vérification de bout en bout réelle** avant toute mise en
+   production, une fois 1-3 possibles (cf. CLAUDE.md, jamais de code
+   non testé présenté comme fonctionnel).

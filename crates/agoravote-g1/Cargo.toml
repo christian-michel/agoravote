@@ -22,6 +22,24 @@ thiserror.workspace = true
 tracing = "0.1"
 uuid.workspace = true
 
+# --- Connexion Ğ1 via `sso-connect` (OAuth2), cf. `sso.rs` ---
+#
+# `reqwest` : seul appel réseau de ce module, deux requêtes HTTPS
+# vers un serveur `sso-connect` (POST /oauth/token, GET
+# /oauth/userinfo — cf. docs/G1_INTEGRATION.md pour le protocole
+# exact, tiré de SITE-INTEGRATION.md du dépôt `sso-connect`).
+# `rustls-tls` plutôt que la TLS native (OpenSSL) : évite de raviver
+# la douleur de compilation OpenSSL déjà rencontrée avec `sqlx` (cf.
+# itération 2 du DEVLOG) et ne dépend d'aucune bibliothèque système.
+# `optional = true`, activé par la feature `sso-connect` ci-dessous,
+# non par défaut — même patron que `subxt`/`chain-query`.
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"], optional = true }
+# Nécessaire seulement pour distinguer, à l'échec d'un appel HTTP, un
+# corps d'erreur JSON `{"error": "invalid_grant"}` (documenté par
+# SITE-INTEGRATION.md) d'un texte d'erreur brut — `serde.workspace`
+# seul (ci-dessus) ne fournit pas de désérialiseur JSON concret.
+serde_json = { workspace = true, optional = true }
+
 # `ed25519-zebra` (Zcash Foundation) : implémentation ed25519 pure,
 # SANS aucune dépendance réseau — c'est la brique qui permet de
 # vérifier une signature hors ligne, testable sans connexion à un
@@ -118,3 +136,20 @@ chain-query = [
     "dep:parity-scale-codec-derive",
     "signature-verification",
 ]
+# Active `sso.rs` (client OAuth2 pour un serveur `sso-connect` tiers,
+# cf. son en-tête). Contrairement à `chain-query`, ne dépend d'aucune
+# des lourdes dépendances Substrate ci-dessus : c'est un client OAuth2
+# HTTPS ordinaire, pas de cryptographie ni de décodage SCALE.
+# `cargo build -p agoravote-g1 --features sso-connect`.
+sso-connect = ["dep:reqwest", "dep:serde_json"]
+
+[dev-dependencies]
+# Uniquement pour les tests de `sso.rs` : un vrai serveur HTTP local
+# (port éphémère, requêtes/réponses HTTP réelles) qui imite les deux
+# endpoints `sso-connect` documentés — pas des fonctions mockées, cf.
+# CLAUDE.md "tests d'intégration réels". `tokio` (déjà dépendance
+# optionnelle de `chain-query` ci-dessus) est répété ici avec la
+# feature `macros` (pour `#[tokio::test]`), absente de la déclaration
+# optionnelle : Cargo fusionne les deux pour `cargo test`.
+wiremock = "0.6"
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }

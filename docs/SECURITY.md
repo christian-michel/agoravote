@@ -259,6 +259,19 @@ détail de l'implémentation (`POST /auth/g1/challenge`,
   L'API (`routes.rs::g1_verify`) et l'écran frontend `/connexion-g1`
   le disent explicitement à l'utilisateur : cette connexion prouve la
   possession de clé, pas l'appartenance à la toile de confiance.
+- **Nouveau, itération 16 — `agoravote_g1::sso` (feature `sso-connect`,
+  non câblée à aucune route)** : client OAuth2 pour un serveur tiers
+  `sso-connect`, qui LUI vérifie l'adhésion à la toile de confiance
+  (cf. `docs/G1_INTEGRATION.md` §7 pour le détail complet). Déplace le
+  modèle de confiance : au lieu d'interroger un nœud RPC nous-mêmes
+  (raison 2 ci-dessus, jamais câblée), on ferait confiance à
+  l'opérateur de l'instance `sso-connect` choisie pour avoir interrogé
+  la chaîne honnêtement — un tiers de confiance différent, pas une
+  élimination de la question. Une fois câblé côté `agoravote-api`, la
+  protection anti-CSRF du paramètre `state` (le protocole
+  `sso-connect` n'implémente pas PKCE, cf. sa doc) devra être un cookie
+  `HttpOnly`/`Secure`/`SameSite=Lax` à courte durée de vie, jamais un
+  état stocké côté serveur transmis en clair, ni un `state` prévisible.
 - **Auto-provisionnement de compte** : la toute première vérification
   réussie pour une clé publique Ğ1 inconnue crée un nouveau `User`
   (rôle `Voter`) sans aucune autre preuve d'identité que la signature

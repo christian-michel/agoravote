@@ -175,6 +175,7 @@ vérifiée, probablement fausse pour les comptes Ğ1v2 réels.
 | `challenge.rs` | Compilé et testé (7 tests verts) — génération de défi et `verify_freshness` (fraîcheur vérifiable sans état serveur, horodatage embarqué dans le texte signé), pur, sans dépendance réseau |
 | `signature.rs` | Compilé et testé (6 tests verts, dont un vecteur ed25519 connu) — feature `signature-verification`, activée par `agoravote-api` (cf. son `Cargo.toml`), via `ed25519-zebra` (pas `subxt-signer`, qui ne propose pas de module ed25519) |
 | `chain.rs` | Compilé (feature `chain-query`) mais non vérifié à l'exécution — réseau Duniter/Ğ1 toujours bloqué dans cet environnement, noms de stockage non confirmés. **Non activée par `agoravote-api`** : `/auth/g1/verify` ne prouve donc que la possession de clé, jamais l'appartenance à la toile de confiance — cf. `docs/SECURITY.md` §8. |
+| `sso.rs` | Compilé et testé (8 tests verts contre un serveur HTTP local imitant `sso-connect` via `wiremock`) — feature `sso-connect`, client OAuth2 « authorization code » pour un serveur tiers `sso-connect` (<https://git.duniter.org/clients/sso-connect>), qui lit lui-même la chaîne Ğ1v2 et nous évite ainsi le blocage de `chain.rs` ci-dessus. **Non câblée à `agoravote-api`** (aucune route HTTP, pas de domaine public à enregistrer côté opérateur pour l'instant) — cf. `docs/G1_INTEGRATION.md` §7. |
 
 **Câblage HTTP** (itération 8) : `POST /auth/g1/challenge` et
 `POST /auth/g1/verify` dans `agoravote-api/src/routes.rs` (cf. table de

@@ -74,6 +74,22 @@ confirmées contre une métadonnée de nœud réel — cf. `docs/SECURITY.md`
 (possession de clé) et ne prouve PAS (appartenance à la toile de
 confiance) tant que `chain-query` n'est pas câblé.
 
+## `sso.rs` (itération 16) : une troisième voie, qui contourne le blocage de `chain.rs`
+
+Feature `sso-connect`, désactivée par défaut : client OAuth2 pour un
+serveur tiers `sso-connect` (<https://git.duniter.org/clients/sso-connect>),
+qui authentifie via un portefeuille Ğ1 (Gecko et compatibles) **et**
+vérifie lui-même l'adhésion à la toile de confiance — sans que ce soit
+`chain.rs` qui le fasse, donc sans dépendre du même accès réseau
+Duniter bloqué depuis cet environnement. `SsoConfig::authorize_url`,
+`exchange_code`, `fetch_identity`, `complete_login`, testés (8 tests
+verts, `cargo test -p agoravote-g1 --features sso-connect`) contre un
+vrai serveur HTTP local (`wiremock`) reproduisant le protocole exact
+documenté par `SITE-INTEGRATION.md` de ce dépôt. **Compilé et testé,
+mais pas câblé à `agoravote-api`** (aucune route HTTP) : cf.
+`docs/G1_INTEGRATION.md` §7 pour ce qui reste (domaine public,
+inscription auprès d'un opérateur, persistance, cookie anti-CSRF).
+
 ## Pour aller plus loin
 
 1. ~~Compiler dans un environnement à toolchain Rust à jour~~ — fait
@@ -83,7 +99,9 @@ confiance) tant que `chain-query` n'est pas câblé.
    qui a accès réseau à l'infrastructure Duniter (celui-ci ne l'a
    toujours pas) : cf. `chain.rs` pour la liste précise de ce qui reste
    à confirmer (noms exacts des éléments de stockage des pallets
-   `Identity` et `Membership`).
+   `Identity` et `Membership`). **Plus bloquant pour obtenir une
+   vérification d'adhésion en général** depuis `sso.rs` (itération 16,
+   cf. ci-dessus), qui ne dépend pas de cette confirmation.
 3. ~~Ajouter un test avec un vecteur cryptographique connu~~ — fait
    (`signature.rs`, vecteur ed25519 depuis l'itération 9 — cf.
    ci-dessus pour le correctif sr25519 -> ed25519).
@@ -96,3 +114,5 @@ confiance) tant que `chain-query` n'est pas câblé.
    vérification optionnelle supplémentaire, par campagne, sur
    `/auth/g1/verify` — sans jamais la présenter comme déjà active tant
    qu'elle ne l'est pas.
+6. Câbler `sso-connect` dans `agoravote-api` (cf. ci-dessus) — dépend
+   d'un domaine public HTTPS pour AgoraVote, pas fait cette itération.

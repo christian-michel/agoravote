@@ -189,6 +189,20 @@ Cf. `docs/G1_INTEGRATION.md` pour le détail complet de chaque étape.
 - [ ] Bascule d'activation de l'identité Ğ1 par organisation (écran
       "Paramètres" de la nav latérale, actuellement grisé) — aucune
       organisation ne peut aujourd'hui désactiver cette connexion.
+- [x] Client OAuth2 pour `sso-connect` (troisième voie de connexion
+      Ğ1, qui vérifie l'adhésion à la toile de confiance SANS que ce
+      soit nous qui interrogions la chaîne — cf. item "Confirmer les
+      noms de stockage" ci-dessus, resté bloqué) :
+      `crates/agoravote-g1/src/sso.rs`, feature `sso-connect`, 8 tests
+      contre un serveur HTTP local. Fait — cf. `docs/DEVLOG.md`
+      itération 16, `docs/G1_INTEGRATION.md` §7.
+- [ ] Câbler `sso-connect` dans `agoravote-api` (routes de départ/
+      callback OAuth2, persistance par `id` d'identité, protection
+      `state` anti-CSRF, écran frontend) — dépend d'un domaine public
+      HTTPS pour AgoraVote (nécessaire à l'inscription manuelle auprès
+      de l'opérateur d'une instance) et n'a donc pas pu être fait cette
+      itération. Cf. `docs/G1_INTEGRATION.md` §7 pour le détail complet
+      de ce qui reste.
 
 ## Sécurité et robustesse
 

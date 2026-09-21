@@ -33,6 +33,22 @@
 //! accès à l'infrastructure Duniter — cf. `crates/agoravote-g1/README.md`
 //! pour la marche à suivre complète.
 //!
+//! ## `sso.rs` — statut de vérification séparé
+//!
+//! [`sso`] *(feature `sso-connect`, désactivée par défaut)* est un
+//! client OAuth2 pour un serveur tiers `sso-connect`
+//! (<https://git.duniter.org/clients/sso-connect>), qui authentifie un
+//! utilisateur via son portefeuille Ğ1 (Gecko et compatibles) ET
+//! vérifie son adhésion à la toile de confiance à notre place — cf.
+//! son en-tête pour le protocole complet. Testé contre un serveur HTTP
+//! local qui imite exactement les réponses documentées par
+//! `SITE-INTEGRATION.md` de ce dépôt, **jamais contre un déploiement
+//! réel** (`connect.monnaie-libre.fr` reste hors d'atteinte réseau
+//! depuis cet environnement, comme le reste de l'infrastructure
+//! Duniter/Ğ1 — cf. ci-dessus) : à revérifier en conditions réelles une
+//! fois AgoraVote enregistré comme client OAuth2 auprès de l'opérateur
+//! d'une instance (cf. `docs/G1_INTEGRATION.md`).
+//!
 //! ## Organisation
 //!
 //! - [`challenge`] — génération d'un défi aléatoire à signer (pur, ne
@@ -44,6 +60,10 @@
 //! - [`chain`] *(feature `chain-query`, désactivée par défaut)* —
 //!   requête au réseau Ğ1v2 pour vérifier qu'un compte est membre actif
 //!   de la toile de confiance.
+//! - [`sso`] *(feature `sso-connect`, désactivée par défaut)* — client
+//!   OAuth2 pour un serveur `sso-connect` tiers, voie alternative vers
+//!   la même garantie que `chain`, sans lire la chaîne nous-mêmes (cf.
+//!   ci-dessus).
 //! - [`error`] — erreurs communes à tout le crate.
 
 pub mod challenge;
@@ -54,6 +74,9 @@ pub mod signature;
 
 #[cfg(feature = "chain-query")]
 pub mod chain;
+
+#[cfg(feature = "sso-connect")]
+pub mod sso;
 
 pub use challenge::Challenge;
 pub use error::G1Error;

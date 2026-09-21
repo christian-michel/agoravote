@@ -17,4 +17,8 @@ pub enum G1Error {
     #[cfg(feature = "chain-query")]
     #[error("erreur de connexion ou de requête au nœud Ğ1v2")]
     Chain(String),
+
+    #[cfg(feature = "sso-connect")]
+    #[error("erreur du fournisseur SSO Ğ1 ({0})")]
+    Sso(String),
 }

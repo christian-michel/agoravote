@@ -1748,3 +1748,112 @@ lui.
    `docker compose up -d` aboutit désormais jusqu'au bout sur sa
    machine avec les nouveaux défauts 4000/4080.
 2. Reste des listes des itérations précédentes, inchangées.
+
+## Itération 16 — client OAuth2 pour `sso-connect`, troisième voie de connexion Ğ1
+
+Objectif : le porteur de projet a signalé l'existence de
+`sso-connect` (<https://git.duniter.org/clients/sso-connect>), un
+serveur OAuth2 tiers qui authentifie via le portefeuille Ğ1 (Gecko) et
+vérifie lui-même l'adhésion à la toile de confiance — contournant
+ainsi, pour cette garantie précise, le blocage réseau qui empêche
+`agoravote_g1::chain` d'être vérifié depuis cet environnement depuis
+l'itération 4. Après fourniture par le porteur de projet du contenu
+réel du README et de `SITE-INTEGRATION.md` de ce dépôt (network
+egress toujours bloqué vers `git.duniter.org`/`forum.duniter.org`
+dans cet environnement, comme pour le reste de l'infrastructure
+Duniter — reconfirmé cette itération), le protocole exact a pu être
+implémenté sans deviner un seul paramètre — cf.
+`docs/G1_INTEGRATION.md` §7 pour l'analyse complète.
+
+### Ce qui a été fait : le client, pas le câblage HTTP
+
+`crates/agoravote-g1/src/sso.rs` (nouvelle feature `sso-connect`,
+désactivée par défaut, même patron que `chain-query`) : `SsoConfig`,
+`authorize_url` (construction pure de l'URL de redirection),
+`exchange_code`/`fetch_identity`/`complete_login` (les deux appels
+HTTPS du protocole « authorization code » OAuth2 RFC 6749, cf.
+`SITE-INTEGRATION.md` §3). Volontairement **pas** de génération ni de
+vérification du paramètre `state` dans ce module : c'est une
+responsabilité HTTP/session qui appartient à l'appelant
+(`agoravote-api`), pas à un crate qui ne fait aucune I/O HTTP entrante
+— même séparation des couches que partout ailleurs dans ce projet.
+
+Décision de séquencement : câbler des routes HTTP complètes
+(`agoravote-api`, nouvelle persistance, écran frontend) a été
+délibérément repoussé à une itération suivante. Deux raisons, pas une
+seule difficulté technique : (1) l'inscription en tant que client
+OAuth2 exige une URL de callback publique enregistrée octet pour octet
+auprès d'un opérateur (`SITE-INTEGRATION.md` §1) — AgoraVote ne tourne
+aujourd'hui qu'en local, rien à enregistrer ; (2) le modèle de données
+correct pour cette identité (clé sur `id`, l'index on-chain — jamais
+sur `address`, contrairement à `G1Link` qui se clé sur
+`public_key_hex`, cf. `SITE-INTEGRATION.md` §"Key the account on
+`id`") mérite sa propre migration/table réfléchie séparément, pas
+réutilisée de force sur `G1Link` qui répond à une question différente
+(possession de clé, pas adhésion à la toile de confiance).
+
+### `reqwest` plutôt qu'une implémentation HTTP maison
+
+Choix délibéré, cohérent avec le reste du projet (ne pas réinventer ce
+qu'une bibliothèque mature fait déjà correctement — même logique que
+`argon2`/`ed25519-zebra` plutôt qu'une crypto maison). `rustls-tls`
+plutôt que la TLS native liée à OpenSSL : évite de raviver la douleur
+de compilation OpenSSL déjà rencontrée avec `sqlx` (itération 2), et
+ne dépend d'aucune bibliothèque système — cohérent avec l'objectif
+d'auto-hébergement simple du projet (§1.1 du cahier des charges).
+
+### Tests : un vrai serveur HTTP local, pas des fonctions mockées
+
+`wiremock` (nouvelle dev-dépendance) monte un vrai serveur HTTP sur un
+port éphémère et répond aux VRAIES requêtes HTTP émises par
+`reqwest` — seul le service distant est un double, pas la couche
+réseau elle-même, cf. CLAUDE.md "tests d'intégration réels, pas de
+mocks pour le cœur métier". 8 tests, dont un qui vérifie l'en-tête
+`Authorization: Basic ...` réellement envoyé par `exchange_code`
+(implémentation indépendante minimale de l'encodage Basic auth dans le
+test, plutôt qu'une dépendance supplémentaire pour un seul test) —
+pas seulement le contenu du corps de requête, pour prouver que le
+client s'authentifie bien comme `SITE-INTEGRATION.md` §3 "Step 4" le
+documente. Un cas non membre (`groups` absent du JSON) vérifie que
+`#[serde(default)]` évite un échec de désérialisation sur ce champ.
+
+### Ce qui a été vérifié concrètement
+
+- `cargo build -p agoravote-g1 --features sso-connect` : compile du
+  premier coup (réseau crates.io accessible depuis cet environnement,
+  contrairement à l'infrastructure Duniter elle-même).
+- `cargo test -p agoravote-g1 --features sso-connect` : 8/8 tests
+  verts, contre un vrai serveur HTTP local, formats de requête/réponse
+  conformes à `SITE-INTEGRATION.md` fourni par le porteur de projet.
+- `make check` (fmt + clippy `-D warnings` + tous les tests, feature
+  set par défaut donc `sso-connect` désactivée) : vert — confirme que
+  la nouvelle dépendance optionnelle n'affecte pas la compilation par
+  défaut du workspace, exactement comme `chain-query` avant elle.
+- `cargo clippy -p agoravote-g1 --features sso-connect --all-targets
+  -- -D warnings` : silencieux.
+
+### Ce qui reste non vérifié (honnêteté du statut)
+
+**Jamais exécuté contre un déploiement `sso-connect` réel**
+(`connect.monnaie-libre.fr` ou toute autre instance) : cet
+environnement n'a pas d'accès réseau à ce domaine, même blocage que
+pour `chain.rs` depuis l'itération 4. Le protocole implémenté suit
+fidèlement le document fourni, mais seule une connexion réelle,
+enregistrée auprès d'un opérateur, confirmerait qu'aucun détail
+(format exact d'un en-tête, comportement d'un cas limite non
+documenté) n'a été mal interprété — cf. le précédent du correctif
+sr25519 -> ed25519 (itération 9), qui rappelle que "conforme à la
+documentation" et "vérifié contre le système réel" restent deux
+affirmations distinctes tant que la seconde n'a pas été faite.
+
+### Prochaines itérations candidates (mise à jour)
+
+1. Une fois AgoraVote déployé sur un domaine public : s'inscrire comme
+   client OAuth2 auprès d'un opérateur `sso-connect`, puis câbler les
+   routes HTTP (`agoravote-api`), la persistance (nouvelle table clée
+   sur l'identité on-chain, pas sur l'adresse), le cookie `state`
+   anti-CSRF, et l'écran frontend — cf. `docs/G1_INTEGRATION.md` §7
+   pour le détail complet de chaque étape restante.
+2. Une vraie connexion de bout en bout contre le déploiement réel
+   avant de présenter cette fonctionnalité comme terminée.
+3. Reste des listes des itérations précédentes, inchangées.
